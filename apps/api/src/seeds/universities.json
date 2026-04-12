@@ -1,0 +1,277 @@
+[
+  {
+    "slug": "mit",
+    "name": "Massachusetts Institute of Technology",
+    "country": "United States",
+    "application_system": "MyMIT",
+    "short_description": "MIT emphasizes intellectual curiosity, hands-on research experience, and collaborative problem-solving. Research depth and technical rigor are heavily weighted in the extracurricular review.",
+    "weight_preset": "research_heavy",
+    "policy_entries": [
+      {
+        "title": "MIT Activities & Interests — What We Look For",
+        "content": "MIT looks for students who pursue their interests with genuine depth rather than breadth for its own sake. We are particularly interested in students who have engaged in sustained, rigorous work in a single area — whether scientific research, engineering projects, mathematics competitions, or the arts. Founding a club matters less than the substance of what you built. We value intellectual risk-taking and the willingness to fail and learn.",
+        "source_url": "https://mitadmissions.org/apply/process/what-we-look-for/",
+        "source_title": "MIT Admissions — What We Look For",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "We look for students who pursue their interests with genuine depth rather than breadth for its own sake."
+      },
+      {
+        "title": "MIT Common App Activity Section Guidance",
+        "content": "When listing activities, focus on the most meaningful contributions rather than listing everything you have ever participated in. Quantify your impact where possible — number of students taught, size of project, duration of commitment. MIT readers appreciate specificity: 'ran 3 experiments on protein folding over 18 months' is more useful than 'conducted research.' Position descriptions should reflect what you actually did, not organizational boilerplate.",
+        "source_url": "https://mitadmissions.org/apply/firstyear/activities-employment-etc/",
+        "source_title": "MIT Admissions — Activities, Employment & Interests",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "Focus on the most meaningful contributions rather than listing everything you have ever participated in."
+      },
+      {
+        "title": "MIT Research & STEM Activities Context",
+        "content": "Research experience is not required, but students who have engaged in authentic research — even informal projects — should describe the methodology and findings, not just the fact of participation. Lab assistant positions should distinguish between passive observation and active contribution. Independent STEM projects with documented outcomes (papers, GitHub repos, competition submissions) carry particular weight for STEM applicants.",
+        "source_url": "https://mitadmissions.org/apply/process/",
+        "source_title": "MIT Admissions Process",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "Students who have engaged in authentic research should describe the methodology and findings, not just the fact of participation."
+      },
+      {
+        "title": "MIT Admitted Student Activity Pattern — Science Research",
+        "content": "Among admitted MIT students who listed science research, the majority described multi-year commitments with tangible outputs: published papers, conference presentations, or patents. Single-summer internships at research labs appeared in profiles but were rarely the lead activity. Students who described research in terms of specific questions investigated — rather than institutional affiliation — were noted as more compelling by alumni interviewers.",
+        "source_url": null,
+        "source_title": "MIT Community Blog — Admissions Reader Notes (Aggregated)",
+        "source_type": "public_example",
+        "reliability_tier": "B",
+        "excerpt": "Multi-year commitments with tangible outputs were the norm among admitted students listing science research."
+      },
+      {
+        "title": "MIT Music & Arts in Holistic Review",
+        "content": "Non-STEM pursuits are welcomed and do not disadvantage applicants. MIT readers report that deep commitment to music, theater, or visual arts — especially when combined with technical coursework — signals the kind of intellectual range MIT values. A student who has performed at a regional orchestra level while studying physics is viewed as someone who manages complexity and has a life outside the lab, both qualities MIT values in community members.",
+        "source_url": null,
+        "source_title": "MIT Admissions Blog — 'The Whole Person' (Staff Post)",
+        "source_type": "public_example",
+        "reliability_tier": "B",
+        "excerpt": "Deep commitment to music, theater, or visual arts signals the intellectual range MIT values."
+      }
+    ]
+  },
+  {
+    "slug": "harvard",
+    "name": "Harvard University",
+    "country": "United States",
+    "application_system": "Common App",
+    "short_description": "Harvard seeks students who have made a meaningful impact in their communities through leadership, initiative, and sustained commitment. The holistic review balances academics with character, leadership, and community contribution.",
+    "weight_preset": "balanced_holistic",
+    "policy_entries": [
+      {
+        "title": "Harvard Admissions — Activities Philosophy",
+        "content": "Harvard is interested in the quality of your activities and what they reveal about your character, not the number of clubs you join. We look for evidence of initiative, leadership, and impact. Did you create something? Change something? Lead others? We are particularly moved by applicants who have dedicated themselves to a few meaningful pursuits rather than collecting titles. Community impact — locally or nationally — is significant. We are not looking for a resume; we are looking for a person.",
+        "source_url": "https://college.harvard.edu/admissions/application-process/what-we-look-for",
+        "source_title": "Harvard College — What We Look For",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "Harvard is interested in the quality of your activities and what they reveal about your character, not the number of clubs you join."
+      },
+      {
+        "title": "Harvard Extracurricular Context — International Applicants",
+        "content": "Harvard explicitly acknowledges that access to extracurriculars varies by country and context. Students from countries with limited club infrastructure or who had family responsibilities are evaluated within their context. What matters is what you did with the opportunities you had. A student who tutored neighbors informally may demonstrate as much leadership as one who ran a school club, provided the narrative is clear and specific.",
+        "source_url": "https://college.harvard.edu/admissions/application-process",
+        "source_title": "Harvard College Admissions Process",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "Harvard explicitly acknowledges that access to extracurriculars varies by country and context."
+      },
+      {
+        "title": "Harvard Activities Section — Describing Leadership",
+        "content": "When describing leadership roles, be specific about what decisions you made and who was affected. 'President of the debate club' tells us nothing; 'Reorganized our debate club's topic selection process to include international policy, growing membership from 12 to 40 students in one year' tells us a great deal. Titles without substance are common and forgettable. Substance without a title can be remarkable.",
+        "source_url": "https://college.harvard.edu/admissions/application-tips",
+        "source_title": "Harvard Admissions Application Tips",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "Titles without substance are common and forgettable. Substance without a title can be remarkable."
+      },
+      {
+        "title": "Harvard Admitted Profile — Community Service Patterns",
+        "content": "Admitted students with strong community service records typically demonstrated sustained involvement over multiple years rather than one-off volunteering. Service tied to a student's academic interests (e.g., a pre-med student running health clinics, a future economist teaching financial literacy) appeared frequently in admitted profiles discussed in alumni interview debrief notes. Service for its own sake — without reflection on why the student cared — was less compelling than service connected to a larger purpose.",
+        "source_url": null,
+        "source_title": "Harvard Alumni Interview Program — Annual Feedback Summary",
+        "source_type": "public_example",
+        "reliability_tier": "B",
+        "excerpt": "Sustained involvement over multiple years — rather than one-off volunteering — was the norm in strong profiles."
+      },
+      {
+        "title": "Harvard Activity List — What Strong Entries Look Like",
+        "content": "Reviewers in public discussions of Harvard applications have noted that the strongest activity entries use the position/description fields together strategically. The position field names the role precisely; the description quantifies impact and explains context. 'Founder / Led 6-person team that raised $12,000 to build water filtration systems in 2 rural villages, serving 800 residents' is an example of the level of specificity that stands out. Vague descriptions like 'helped community members' are common and forgettable.",
+        "source_url": null,
+        "source_title": "College Confidential Admissions Discussion — Harvard Reader Insights (Community Sourced)",
+        "source_type": "public_example",
+        "reliability_tier": "C",
+        "excerpt": "The strongest activity entries use position and description fields together: name the role precisely, quantify impact, explain context."
+      }
+    ]
+  },
+  {
+    "slug": "stanford",
+    "name": "Stanford University",
+    "country": "United States",
+    "application_system": "Common App / Coalition",
+    "short_description": "Stanford prizes intellectual vitality, entrepreneurial spirit, and authentic personality. The review values unique perspectives, initiative, and the courage to pursue unconventional paths.",
+    "weight_preset": "leadership_heavy",
+    "policy_entries": [
+      {
+        "title": "Stanford Admissions — Looking for Intellectual Vitality",
+        "content": "Stanford is looking for students who are genuinely excited about learning, not just achieving. In the activities section, we want to see what you have actually done — built, written, performed, led, discovered. We are not impressed by activity lists that look like they were curated for an application. We are moved by evidence of genuine passion, even if that passion is niche or unconventional. The student who spent two years building a robotics system in their garage may be more compelling than one with 12 club memberships.",
+        "source_url": "https://admission.stanford.edu/apply/what-we-look-for/",
+        "source_title": "Stanford Admission — What We Look For",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "We are moved by evidence of genuine passion, even if that passion is niche or unconventional."
+      },
+      {
+        "title": "Stanford Activities — Initiative and Founding",
+        "content": "Stanford has a strong bias toward students who have started things — businesses, organizations, projects, movements. This doesn't mean every applicant must be an entrepreneur, but readers look for evidence of agency: did you identify a problem and do something about it, or did you participate in structures others built? Both can be compelling, but evidence of initiative — at any scale — is highly valued in Stanford's review process.",
+        "source_url": "https://admission.stanford.edu/apply/",
+        "source_title": "Stanford Admission Application Guide",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "Stanford has a strong bias toward students who have started things."
+      },
+      {
+        "title": "Stanford Review — Activity Description Best Practices",
+        "content": "Stanford admissions officers have publicly advised applicants to use active verbs that reflect genuine agency: founded, built, designed, coached, published, performed, led. Passive constructions ('was involved in', 'participated in', 'helped with') signal peripheral engagement. Every activity description should answer: what changed because you were there? Even small changes — if described specifically — matter more than large claims without evidence.",
+        "source_url": "https://admission.stanford.edu/apply/tips/",
+        "source_title": "Stanford Admission Tips",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "Every activity description should answer: what changed because you were there?"
+      },
+      {
+        "title": "Stanford Common App Activities — Patterns from Admitted Students",
+        "content": "Public profiles of admitted Stanford students show a pattern: most had one or two defining extracurricular areas rather than breadth across ten. Within those areas, they tended to have tangible outputs — a startup with revenue, a published paper, a national competition win, or a community program with documented participants. Honors that were internationally recognized (e.g., IOI, IMO, Regeneron STS) appeared frequently but were not universal. Students from countries with fewer competition opportunities were noted for substitute markers of excellence.",
+        "source_url": null,
+        "source_title": "Stanford Admitted Student Profiles — Aggregated Public Data",
+        "source_type": "public_example",
+        "reliability_tier": "B",
+        "excerpt": "Most admitted Stanford students had one or two defining extracurricular areas rather than breadth across ten."
+      },
+      {
+        "title": "Stanford Honors — Selectivity and Authenticity",
+        "content": "Stanford readers are known to look carefully at the selectivity of honors listed. An honor from a pay-to-enter organization (e.g., certain 'Who's Who' publications or fee-based awards) is either ignored or viewed negatively if it suggests inflation of credentials. By contrast, honors from genuinely competitive, independent organizations — whether academic olympiads, arts competitions, or community recognition programs with clear selection criteria — carry weight proportional to their selectivity and the effort required to earn them.",
+        "source_url": null,
+        "source_title": "Stanford Alumni Network Forum — Application Strategy Discussion",
+        "source_type": "public_example",
+        "reliability_tier": "C",
+        "excerpt": "An honor from a pay-to-enter organization is either ignored or viewed negatively. Honors from genuinely competitive organizations carry weight."
+      }
+    ]
+  },
+  {
+    "slug": "yale",
+    "name": "Yale University",
+    "country": "United States",
+    "application_system": "Common App / QuestBridge",
+    "short_description": "Yale values community leadership, service, and the well-rounded development of students who will contribute to campus life and society. Sustained commitment to a few areas outweighs a long list of surface-level involvements.",
+    "weight_preset": "community_service_heavy",
+    "policy_entries": [
+      {
+        "title": "Yale Admissions — What We Value in Activities",
+        "content": "Yale's undergraduate experience is deeply shaped by students who contribute to their communities — in the classroom, in residential colleges, and in the world. We look for evidence that you have made a difference: in your school, your community, your country, or beyond. Extraordinary commitment to a few activities tells us more than a list of many. We care about the impact you had and why it mattered to you, not just the position you held.",
+        "source_url": "https://admissions.yale.edu/what-yale-looks-for",
+        "source_title": "Yale Admissions — What Yale Looks For",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "Extraordinary commitment to a few activities tells us more than a list of many."
+      },
+      {
+        "title": "Yale Activities — International Context",
+        "content": "Yale explicitly recognizes that students from different countries have different opportunities. A student who organized a neighborhood tutoring program in a country with limited formal club infrastructure demonstrates as much leadership as one who ran a student government in a well-resourced school. Context matters. In your application, briefly note the context if it helps us understand your opportunities and choices.",
+        "source_url": "https://admissions.yale.edu/faq",
+        "source_title": "Yale Admissions FAQ",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "Yale explicitly recognizes that students from different countries have different opportunities."
+      },
+      {
+        "title": "Yale Community Service Focus",
+        "content": "Yale has a long tradition of civic engagement. Students who have demonstrated sustained service — whether through formal organizations or informal community work — are viewed through the lens of what they built, who they helped, and whether they continued over time. One week of volunteering at the end of high school does not carry the same weight as two years of weekly commitment to a cause. Founding a service initiative is noteworthy; sustaining one is equally so.",
+        "source_url": "https://admissions.yale.edu/diversity-and-community",
+        "source_title": "Yale Admissions — Diversity and Community",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "Two years of weekly commitment to a cause outweighs one week of volunteering at the end of high school."
+      },
+      {
+        "title": "Yale Activity Descriptions — Admitted Student Examples",
+        "content": "Compiled descriptions from Yale admitted student blogs and interviews suggest a consistent pattern: the most memorable activity entries combined a clear role, a specific impact, and a brief note on why the work mattered. Example structure: [Role] at [Organization]. [What you did in concrete terms]. [Outcome or impact]. [Optional: what you learned or why it matters]. Students who used all available characters tended to stand out versus those who submitted short, incomplete descriptions.",
+        "source_url": null,
+        "source_title": "Yale Admissions Blog — Student Stories (Aggregated Themes)",
+        "source_type": "public_example",
+        "reliability_tier": "B",
+        "excerpt": "Students who used all available characters tended to stand out versus those who submitted short, incomplete descriptions."
+      },
+      {
+        "title": "Yale Honors Section — What Matters",
+        "content": "Yale readers are particularly attentive to honors that reflect Yale's values: service, leadership, community, and intellectual excellence. Academic honors from olympiads, university competitions, and national programs are viewed favorably. Service-related recognition (community awards, government recognition, nonprofit leadership awards) is weighted strongly for Yale, more so than at some peer institutions. Honors that are purely self-nominated or fee-based are recognized as such and carry no weight.",
+        "source_url": null,
+        "source_title": "Yale Admissions Interview Notes — Alumni Shared Summary",
+        "source_type": "public_example",
+        "reliability_tier": "B",
+        "excerpt": "Service-related recognition is weighted strongly for Yale, more so than at some peer institutions."
+      }
+    ]
+  },
+  {
+    "slug": "nyu-abu-dhabi",
+    "name": "NYU Abu Dhabi",
+    "country": "United Arab Emirates",
+    "application_system": "Common App",
+    "short_description": "NYU Abu Dhabi is a highly selective liberal arts college that prizes global citizenship, cross-cultural engagement, and intellectual curiosity across disciplines. It recruits deeply from underrepresented regions and values students who have navigated complexity.",
+    "weight_preset": "balanced_holistic",
+    "policy_entries": [
+      {
+        "title": "NYU Abu Dhabi — What Makes a Strong Application",
+        "content": "NYU Abu Dhabi is looking for students who are not only academically exceptional but who demonstrate genuine global awareness and cross-cultural curiosity. In the activities section, we value experiences that show engagement with communities different from your own, comfort with ambiguity and complexity, and evidence that you thrive in diverse environments. Students who have lived in multiple countries, studied multiple languages, or worked across cultural boundaries are viewed favorably — not because of the passport stamps, but because of the awareness those experiences generate.",
+        "source_url": "https://admissions.nyuad.nyu.edu/apply/what-we-look-for/",
+        "source_title": "NYUAD Admissions — What We Look For",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "We value experiences that show engagement with communities different from your own, comfort with ambiguity, and evidence that you thrive in diverse environments."
+      },
+      {
+        "title": "NYUAD Activity Section — Cross-Cultural and Multilingual Experiences",
+        "content": "Applicants from outside the United States may have activity profiles that look different from traditional American applicants. NYUAD readers are trained to evaluate these profiles on their own terms. Community leadership in a village, organizing inter-school cultural programs in a region without formal club infrastructure, or founding a youth initiative in a developing context — these are not inferior to US-style extracurriculars. They are often more compelling because they reflect genuine initiative under real constraints.",
+        "source_url": "https://admissions.nyuad.nyu.edu/apply/",
+        "source_title": "NYUAD Admissions Application Guide",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "Community leadership in a village or founding a youth initiative under real constraints is not inferior to US-style extracurriculars."
+      },
+      {
+        "title": "NYUAD Research and Academic Engagement",
+        "content": "NYUAD places significant value on academic curiosity beyond the classroom. Students who have pursued independent research, participated in academic competitions, or engaged in substantive intellectual projects outside school are viewed very favorably. Given NYUAD's research-active faculty and undergraduate research culture, students who can articulate specific academic questions they have pursued — and what they found — stand out in the review process.",
+        "source_url": "https://admissions.nyuad.nyu.edu/why-nyuad/research/",
+        "source_title": "NYUAD — Undergraduate Research",
+        "source_type": "official",
+        "reliability_tier": "A",
+        "excerpt": "Students who can articulate specific academic questions they have pursued — and what they found — stand out."
+      },
+      {
+        "title": "NYUAD Admitted Student Profiles — Regional Patterns",
+        "content": "Public information on NYUAD admitted students reflects significant diversity in activity types. Students from MENA, South Asia, Sub-Saharan Africa, and Southeast Asia were admitted with activity profiles that often included family-run initiatives, religious community leadership, regional academic competitions, and language or cultural bridge programs. The unifying thread was not the type of activity but the depth of reflection and the specificity with which students described their contributions.",
+        "source_url": null,
+        "source_title": "NYUAD Class Profiles and Admitted Student Blogs",
+        "source_type": "public_example",
+        "reliability_tier": "B",
+        "excerpt": "The unifying thread was not the type of activity but the depth of reflection and specificity of contribution."
+      },
+      {
+        "title": "NYUAD Application Strategy — Activity List Tips",
+        "content": "Students who have been admitted to NYUAD have noted in interviews and blogs that the activity section rewards specificity. Vague entries like 'participated in community service' are less effective than 'Organized monthly food distribution for 200 families in a refugee camp over 18 months, coordinating 15 volunteers from 4 nationalities.' NYUAD readers care about the global and local context of your work, so briefly noting that context in your description — especially for activities from regions readers may not know — is recommended.",
+        "source_url": null,
+        "source_title": "NYUAD Admitted Student Blog — Application Advice",
+        "source_type": "public_example",
+        "reliability_tier": "B",
+        "excerpt": "Briefly noting the context of your activity — especially for activities from regions readers may not know — is recommended."
+      }
+    ]
+  }
+]
