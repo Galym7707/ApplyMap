@@ -13,6 +13,9 @@ export function useAuth() {
     queryKey: ["auth", "me"],
     queryFn: async () => {
       try {
+        if (typeof window !== "undefined" && !localStorage.getItem("sourcelock_token")) {
+          return null;
+        }
         const res = await authApi.me();
         return res.data.data as User;
       } catch {

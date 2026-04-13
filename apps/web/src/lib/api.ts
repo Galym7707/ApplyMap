@@ -27,7 +27,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       if (typeof window !== "undefined") {
         localStorage.removeItem("sourcelock_token");
-        window.location.href = "/sign-in";
+        const isAuthPage = ["/sign-in", "/sign-up"].includes(window.location.pathname);
+        if (!isAuthPage) {
+          window.location.href = "/sign-in";
+        }
       }
     }
     return Promise.reject(error);
