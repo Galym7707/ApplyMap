@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Pencil, Trash2, AlertTriangle, CheckCircle, Info } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, CheckCircle, Info, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { Achievement } from "@/types";
 
@@ -30,25 +30,36 @@ const achievementSchema = z.object({
   weeks_per_year: z.string().optional(),
   impact_scope: z.enum(["school", "local", "regional", "national", "international", "family", "personal", ""]).optional(),
   leadership_level: z.enum(["none", "member", "lead", "founder", "captain", ""]).optional(),
-  major_relevance_score: z.string().optional(),
-  continuity_score: z.string().optional(),
-  selectivity_score: z.string().optional(),
-  distinctiveness_score: z.string().optional(),
 });
 
 type FormData = z.infer<typeof achievementSchema>;
 
+const SCORE_FIELDS: { key: keyof Achievement; label: string }[] = [
+  { key: "major_relevance_score", label: "Major relevance" },
+  { key: "selectivity_score", label: "Selectivity" },
+  { key: "continuity_score", label: "Continuity" },
+  { key: "distinctiveness_score", label: "Distinctiveness" },
+];
+
+function hasChancellorScores(achievement: Achievement) {
+  return SCORE_FIELDS.every((field) => typeof achievement[field.key] === "number");
+}
+
+function formatScore(value: Achievement[keyof Achievement]) {
+  return typeof value === "number" ? value.toFixed(1).replace(/\.0$/, "") : "Pending";
+}
+
 function getStatusBadge(achievement: Achievement) {
   const desc = achievement.description_raw ?? "";
-  const hasAllScores =
-    achievement.major_relevance_score != null &&
-    achievement.selectivity_score != null;
 
   if (achievement.truth_risk_flag) {
     return { label: "Review Needed", variant: "destructive" as const, icon: AlertTriangle };
   }
-  if (desc.length < 30 || !hasAllScores) {
+  if (desc.length < 30) {
     return { label: "Needs Detail", variant: "warning" as const, icon: Info };
+  }
+  if (!hasChancellorScores(achievement)) {
+    return { label: "Analysis Pending", variant: "info" as const, icon: Sparkles };
   }
   return { label: "Strong", variant: "success" as const, icon: CheckCircle };
 }
@@ -73,10 +84,6 @@ function AchievementModal({
           ...editing,
           hours_per_week: editing.hours_per_week?.toString() ?? "",
           weeks_per_year: editing.weeks_per_year?.toString() ?? "",
-          major_relevance_score: editing.major_relevance_score?.toString() ?? "",
-          continuity_score: editing.continuity_score?.toString() ?? "",
-          selectivity_score: editing.selectivity_score?.toString() ?? "",
-          distinctiveness_score: editing.distinctiveness_score?.toString() ?? "",
           impact_scope: editing.impact_scope ?? "",
           leadership_level: editing.leadership_level ?? "",
         }
@@ -111,10 +118,6 @@ function AchievementModal({
       ...raw,
       hours_per_week: raw.hours_per_week ? parseFloat(raw.hours_per_week) : undefined,
       weeks_per_year: raw.weeks_per_year ? parseInt(raw.weeks_per_year) : undefined,
-      major_relevance_score: raw.major_relevance_score ? parseFloat(raw.major_relevance_score) : undefined,
-      continuity_score: raw.continuity_score ? parseFloat(raw.continuity_score) : undefined,
-      selectivity_score: raw.selectivity_score ? parseFloat(raw.selectivity_score) : undefined,
-      distinctiveness_score: raw.distinctiveness_score ? parseFloat(raw.distinctiveness_score) : undefined,
       impact_scope: raw.impact_scope || undefined,
       leadership_level: raw.leadership_level || undefined,
     };
@@ -206,27 +209,15 @@ function AchievementModal({
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <p className="mb-3 text-xs font-medium text-slate-600 uppercase tracking-wider">Scores (0–10, optional — improves report quality)</p>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { name: "major_relevance_score", label: "Major relevance" },
-                { name: "selectivity_score", label: "Selectivity" },
-                { name: "continuity_score", label: "Continuity" },
-                { name: "distinctiveness_score", label: "Distinctiveness" },
-              ].map((field) => (
-                <div key={field.name} className="space-y-1.5">
-                  <Label className="text-xs">{field.label}</Label>
-                  <Input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="10"
-                    placeholder="0–10"
-                    {...register(field.name as keyof FormData)}
-                  />
-                </div>
-              ))}
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
+            <div className="flex gap-2">
+              <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">Chancellor analysis runs after saving.</p>
+                <p className="mt-1 text-xs text-blue-800">
+                  The app will estimate major relevance, selectivity, continuity, and distinctiveness from your achievement details.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -276,6 +267,32 @@ function AchievementCard({
             {achievement.leadership_level && <span>· Leadership: {achievement.leadership_level}</span>}
             {achievement.hours_per_week && <span>· {achievement.hours_per_week}h/wk</span>}
             {achievement.category && <span>· {achievement.category}</span>}
+          </div>
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-700">
+              <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+              Chancellor analysis
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {SCORE_FIELDS.map((field) => {
+                const score = achievement[field.key];
+                const numericScore = typeof score === "number" ? score : 0;
+                return (
+                  <div key={field.key} className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-slate-500">{field.label}</span>
+                      <span className="font-medium text-slate-800">{formatScore(score)}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-blue-600"
+                        style={{ width: `${numericScore * 10}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">

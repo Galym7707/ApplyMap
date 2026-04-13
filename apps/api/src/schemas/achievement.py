@@ -18,10 +18,6 @@ class AchievementCreate(BaseModel):
     weeks_per_year: Optional[int] = Field(None, ge=0, le=52)
     impact_scope: Optional[ImpactScope] = None
     leadership_level: Optional[LeadershipLevel] = None
-    major_relevance_score: Optional[float] = Field(None, ge=0, le=10)
-    continuity_score: Optional[float] = Field(None, ge=0, le=10)
-    selectivity_score: Optional[float] = Field(None, ge=0, le=10)
-    distinctiveness_score: Optional[float] = Field(None, ge=0, le=10)
     truth_risk_flag: Optional[bool] = None
 
 
@@ -37,10 +33,6 @@ class AchievementUpdate(BaseModel):
     weeks_per_year: Optional[int] = Field(None, ge=0, le=52)
     impact_scope: Optional[ImpactScope] = None
     leadership_level: Optional[LeadershipLevel] = None
-    major_relevance_score: Optional[float] = Field(None, ge=0, le=10)
-    continuity_score: Optional[float] = Field(None, ge=0, le=10)
-    selectivity_score: Optional[float] = Field(None, ge=0, le=10)
-    distinctiveness_score: Optional[float] = Field(None, ge=0, le=10)
     truth_risk_flag: Optional[bool] = None
 
 

@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000"]
 
+    # AI Chancellor
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+
     # S3 / Storage
     S3_BUCKET_NAME: str = ""
     AWS_ACCESS_KEY_ID: str = ""
