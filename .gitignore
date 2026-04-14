@@ -25,6 +25,9 @@ dist/
 # Build outputs
 build/
 
+# Turbo
+.turbo/
+
 # OS
 .DS_Store
 Thumbs.db

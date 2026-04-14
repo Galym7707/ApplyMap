@@ -38,12 +38,23 @@ SCORE_SCHEMA = {
             "type": "number",
             "minimum": 0,
             "maximum": 10,
-            "description": "How uncommon, self-directed, leadership-heavy, or impact-heavy the achievement is.",
+            "description": "How uncommon, self-directed, leadership-heavy, impact-heavy, or spike-relevant the achievement is.",
         },
     },
     "required": list(SCORE_KEYS),
     "additionalProperties": False,
 }
+
+ADMISSIONS_FRAMEWORK = """
+Use this admissions strategy framework:
+- Depth beats breadth. A few world-class or deeply developed achievements should score higher than many generic activities.
+- Favor a strong, authentic spike: a sustained area where the student shows uncommon initiative, impact, rigor, or visibility.
+- Impact and leadership matter most when they are specific: built, published, founded, led, scaled, won, selected, presented, or served a defined audience.
+- Authenticity matters. Do not reward over-polished, vague, buzzword-heavy, or all-perfect claims without concrete evidence.
+- Major strategy matters. If the intended major is crowded for the student's context, reward achievements that make the profile more distinctive or cross-disciplinary.
+- Home-country context matters for international students. Global impact is stronger when it is also tied back to a real local or national context.
+- Be conservative when evidence is missing. Never invent facts.
+""".strip()
 
 
 def _value(source: Any, field: str) -> Any:
@@ -121,16 +132,18 @@ def _gemini_prompt(source: Any, user: Optional[Any]) -> str:
         "achievement": _achievement_context(source),
     }
     return (
-        "You are SourceLock Chancellor, an admissions evaluation assistant. "
-        "Score one student achievement for international university admissions.\n\n"
-        "Kazakhstan context: treat UNT/ENT, MESK/NIS selection exam, the NIS Programme, IB, and A-levels "
+        "You are ApplyMap Chancellor, an admissions evaluation assistant for international applicants. "
+        "Score one student achievement. Use the framework below, but only use facts present in the input.\n\n"
+        "Kazakhstan context: treat UNT/ENT, NIS selection context, the NIS Grade 12 Certificate, IB, and A-levels "
         "as relevant academic contexts when they appear. NIS applicants may have selective STEM-focused, "
-        "trilingual, Cambridge-aligned academic backgrounds. Do not invent facts that are not present in the input.\n\n"
+        "trilingual, Cambridge-aligned academic backgrounds. MESK in Russian/Kazakh user language maps to "
+        "NIS Grade 12 Certificate in English output.\n\n"
+        f"{ADMISSIONS_FRAMEWORK}\n\n"
         "Score each field from 0 to 10, using one decimal place when useful:\n"
-        "- major_relevance_score: fit with intended major or academic direction.\n"
+        "- major_relevance_score: fit with intended major, academic direction, and profile strategy.\n"
         "- selectivity_score: competitiveness, award level, and selection difficulty.\n"
         "- continuity_score: sustained commitment based on time, duration, and responsibility.\n"
-        "- distinctiveness_score: uncommon initiative, leadership, originality, or impact.\n\n"
+        "- distinctiveness_score: uncommon spike, initiative, leadership, originality, visibility, or impact.\n\n"
         "Be conservative when evidence is missing. Return JSON only.\n\n"
         f"Input JSON:\n{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
@@ -167,13 +180,7 @@ def _gemini_scores(source: Any, user: Optional[Any]) -> Optional[dict[str, float
     model = (settings.GEMINI_MODEL or "gemini-2.5-flash").strip()
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     request_payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": _gemini_prompt(source, user)},
-                ]
-            }
-        ],
+        "contents": [{"parts": [{"text": _gemini_prompt(source, user)}]}],
         "generationConfig": {
             "temperature": 0.1,
             "responseMimeType": "application/json",
@@ -208,9 +215,27 @@ def _heuristic_scores(source: Any, user: Optional[Any] = None) -> dict[str, floa
 
     major_score = 5.0
     if intended_major:
-        major_terms = [term for term in intended_major.replace("/", " ").replace(",", " ").split() if len(term) > 2]
+        major_terms = [
+            term
+            for term in intended_major.replace("/", " ").replace(",", " ").split()
+            if len(term) > 2
+        ]
         major_score = 7.0 if any(term in text for term in major_terms) else 4.5
-    elif _contains_any(text, ["research", "science", "math", "physics", "chemistry", "biology", "robot", "programming", "engineering", "economics"]):
+    elif _contains_any(
+        text,
+        [
+            "research",
+            "science",
+            "math",
+            "physics",
+            "chemistry",
+            "biology",
+            "robot",
+            "programming",
+            "engineering",
+            "economics",
+        ],
+    ):
         major_score = 6.0
     if _contains_any(text, ["coursework", "project", "lab", "olympiad", "competition", "internship"]):
         major_score += 1.0
@@ -225,7 +250,10 @@ def _heuristic_scores(source: Any, user: Optional[Any] = None) -> dict[str, floa
         "personal": 2.5,
     }
     selectivity_score = scope_base.get(scope, 4.5)
-    if _contains_any(text, ["selected", "selective", "winner", "finalist", "medal", "olympiad", "scholarship", "first place", "top "]):
+    if _contains_any(
+        text,
+        ["selected", "selective", "winner", "finalist", "medal", "olympiad", "scholarship", "first place", "top "],
+    ):
         selectivity_score += 1.5
     if _contains_any(text, ["imo", "ipho", "ibo", "nasa", "global", "international"]):
         selectivity_score += 1.0
@@ -249,8 +277,13 @@ def _heuristic_scores(source: Any, user: Optional[Any] = None) -> dict[str, floa
         distinctiveness_score += 1.5
     if scope in {"national", "international"}:
         distinctiveness_score += 1.0
-    if _contains_any(text, ["founded", "created", "built", "published", "patent", "copyright", "research", "startup", "world champion", "first place"]):
+    if _contains_any(
+        text,
+        ["founded", "created", "built", "published", "patent", "research", "startup", "world champion", "first place"],
+    ):
         distinctiveness_score += 1.5
+    if _contains_any(text, ["press", "media", "tedx", "conference", "downloads", "users"]):
+        distinctiveness_score += 1.0
     if _contains_any(text, ["helped", "member", "participated"]) and len(text) < 120:
         distinctiveness_score -= 0.5
 

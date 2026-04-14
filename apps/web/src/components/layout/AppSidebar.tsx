@@ -12,10 +12,10 @@ import {
   Library,
   LogOut,
   Settings,
-  Lock,
   Check,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { ApplyMapLogo } from "@/components/brand/ApplyMapLogo";
 import { achievementsApi, reportsApi, targetsApi } from "@/lib/api";
 import type { Report } from "@/types";
 
@@ -105,10 +105,7 @@ export function AppSidebar() {
     <aside className="flex h-full w-60 flex-col border-r border-slate-200 bg-[#F9F8F6]">
       {/* Logo */}
       <div className="flex h-14 items-center gap-2.5 border-b border-slate-200 px-5">
-        <div className="flex h-6 w-6 items-center justify-center rounded bg-navy-950">
-          <Lock className="h-3.5 w-3.5 text-white" />
-        </div>
-        <span className="text-sm font-semibold text-slate-900">SourceLock</span>
+        <ApplyMapLogo className="h-8" />
       </div>
 
       {/* Nav */}

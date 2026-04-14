@@ -7,6 +7,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ApplyMapLogo } from "@/components/brand/ApplyMapLogo";
 import { useAuth } from "@/hooks/useAuth";
 import { AlertCircle } from "lucide-react";
 
@@ -43,21 +44,18 @@ export default function SignUpPage() {
       : null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F9F8F6] px-4 py-12">
-      <div className="w-full max-w-sm">
+    <div className="flex min-h-screen items-center justify-center bg-[#F9F8F6] px-5 py-12">
+      <div className="w-full max-w-xl">
         {/* Logo */}
-        <Link href="/" className="mb-8 flex items-center justify-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded bg-navy-950">
-            <span className="text-xs font-bold text-white">SL</span>
-          </div>
-          <span className="text-base font-semibold text-slate-900">SourceLock</span>
+        <Link href="/" className="mb-10 flex items-center justify-center gap-3">
+          <ApplyMapLogo className="h-16" />
         </Link>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-900">Create your account</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Start optimizing your Common App activities — free.
+        <div className="rounded-lg border border-slate-200 bg-white p-8 shadow-sm sm:p-10 md:p-12">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-slate-900">Create your account</h1>
+            <p className="mt-2 text-base text-slate-500">
+              Start mapping your applications for free.
             </p>
           </div>
 
@@ -68,56 +66,56 @@ export default function SignUpPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="full_name">Full name</Label>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="full_name" className="text-base">Full name</Label>
               <Input
                 id="full_name"
                 placeholder="Amara Osei"
                 {...register("full_name")}
-                className={errors.full_name ? "border-red-400" : ""}
+                className={`h-12 px-4 text-base ${errors.full_name ? "border-red-400" : ""}`}
               />
               {errors.full_name && (
                 <p className="text-xs text-red-600">{errors.full_name.message}</p>
               )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-base">Email</Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="amara@example.com"
                 {...register("email")}
-                className={errors.email ? "border-red-400" : ""}
+                className={`h-12 px-4 text-base ${errors.email ? "border-red-400" : ""}`}
               />
               {errors.email && (
                 <p className="text-xs text-red-600">{errors.email.message}</p>
               )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-base">Password</Label>
               <Input
                 id="password"
                 type="password"
                 placeholder="At least 8 characters"
                 {...register("password")}
-                className={errors.password ? "border-red-400" : ""}
+                className={`h-12 px-4 text-base ${errors.password ? "border-red-400" : ""}`}
               />
               {errors.password && (
                 <p className="text-xs text-red-600">{errors.password.message}</p>
               )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="confirmPassword">Confirm password</Label>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword" className="text-base">Confirm password</Label>
               <Input
                 id="confirmPassword"
                 type="password"
                 placeholder="Re-enter your password"
                 {...register("confirmPassword")}
-                className={errors.confirmPassword ? "border-red-400" : ""}
+                className={`h-12 px-4 text-base ${errors.confirmPassword ? "border-red-400" : ""}`}
               />
               {errors.confirmPassword && (
                 <p className="text-xs text-red-600">{errors.confirmPassword.message}</p>
@@ -126,15 +124,15 @@ export default function SignUpPage() {
 
             <Button
               type="submit"
-              className="w-full bg-navy-950 text-white hover:bg-navy-900"
-              size="lg"
+              className="w-full bg-navy-950 text-base text-white hover:bg-navy-900"
+              size="xl"
               disabled={isSignupPending}
             >
               {isSignupPending ? "Creating account..." : "Create account"}
             </Button>
           </form>
 
-          <p className="mt-5 text-center text-sm text-slate-500">
+          <p className="mt-6 text-center text-base text-slate-500">
             Already have an account?{" "}
             <Link href="/sign-in" className="font-medium text-navy-950 hover:underline">
               Sign in

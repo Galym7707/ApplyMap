@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { authApi } from "@/lib/api";
+import { authApi, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import type { User } from "@/types";
 
@@ -12,6 +12,9 @@ export function useAuth() {
   const { data: user, isLoading } = useQuery<User | null>({
     queryKey: ["auth", "me"],
     queryFn: async () => {
+      if (typeof window !== "undefined" && !getStoredAuthToken()) {
+        return null;
+      }
       try {
         if (typeof window !== "undefined" && !localStorage.getItem("sourcelock_token")) {
           return null;
@@ -30,7 +33,7 @@ export function useAuth() {
     mutationFn: authApi.login,
     onSuccess: (res) => {
       const token = res.data.data?.access_token;
-      if (token) localStorage.setItem("sourcelock_token", token);
+      if (token) setStoredAuthToken(token);
       queryClient.setQueryData(["auth", "me"], res.data.data?.user);
       router.push("/dashboard");
     },
@@ -40,7 +43,7 @@ export function useAuth() {
     mutationFn: authApi.signup,
     onSuccess: (res) => {
       const token = res.data.data?.access_token;
-      if (token) localStorage.setItem("sourcelock_token", token);
+      if (token) setStoredAuthToken(token);
       queryClient.setQueryData(["auth", "me"], res.data.data?.user);
       router.push("/onboarding");
     },
@@ -49,7 +52,7 @@ export function useAuth() {
   const logoutMutation = useMutation({
     mutationFn: authApi.logout,
     onSuccess: () => {
-      localStorage.removeItem("sourcelock_token");
+      clearStoredAuthToken();
       queryClient.clear();
       router.push("/");
     },

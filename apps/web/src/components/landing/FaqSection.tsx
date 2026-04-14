@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const faqs = [
   {
     q: "Will this guarantee my admission?",
-    a: "No. SourceLock does not predict or guarantee admission outcomes. We provide source-backed guidance on how to present your genuine achievements for a specific university's stated criteria. Admission decisions involve many factors we cannot control.",
+    a: "No. ApplyMap does not predict or guarantee admission outcomes. We provide source-backed guidance on how to present your genuine achievements for a specific university's stated criteria. Admission decisions involve many factors we cannot control.",
   },
   {
     q: "Is this for Common App specifically?",
@@ -15,7 +15,7 @@ const faqs = [
   },
   {
     q: "Can I use this if I'm from outside the US?",
-    a: "SourceLock is built specifically for international applicants. The source database includes guidance from universities that explicitly addresses international context, curriculum differences, and opportunity gaps.",
+    a: "ApplyMap is built specifically for international applicants. The source database includes guidance from universities that explicitly addresses international context, curriculum differences, and opportunity gaps.",
   },
   {
     q: "What universities are supported?",
@@ -31,7 +31,7 @@ const faqs = [
   },
   {
     q: "How is this different from a college counselor?",
-    a: "A good counselor who knows MIT well is excellent — SourceLock doesn't replace that. For students who don't have access to specialized counselors (which describes most international applicants), SourceLock provides the same source-grounded framework at a fraction of the cost.",
+    a: "A good counselor who knows MIT well is excellent — ApplyMap doesn't replace that. For students who don't have access to specialized counselors (which describes most international applicants), ApplyMap provides the same source-grounded framework at a fraction of the cost.",
   },
 ];
 

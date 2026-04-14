@@ -24,7 +24,7 @@ export function TrustSection() {
       icon: Globe,
       title: "Built for international students",
       description:
-        "Context matters. SourceLock recognizes that a student from Nigeria, Vietnam, or Argentina has different access to extracurriculars than a US applicant. Our sources reflect this.",
+        "Context matters. ApplyMap recognizes that a student from Nigeria, Vietnam, or Argentina has different access to extracurriculars than a US applicant. Our sources reflect this.",
     },
   ];
 

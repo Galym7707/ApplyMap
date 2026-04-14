@@ -213,7 +213,7 @@ export default function ReportDetailPage({ params }: { params: { id: string } })
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `sourcelock-report-${params.id}.json`;
+      a.download = `applymap-report-${params.id}.json`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success("Report exported");

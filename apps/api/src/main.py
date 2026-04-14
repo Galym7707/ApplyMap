@@ -12,7 +12,7 @@ Base.metadata.create_all(bind=engine)
 ensure_application_schema()
 
 app = FastAPI(
-    title="SourceLock API",
+    title="ApplyMap API",
     description="Source-backed Common App optimization for international applicants",
     version="0.1.0",
     docs_url="/docs",
@@ -39,9 +39,9 @@ app.include_router(admin.router)
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "service": "sourcelock-api"}
+    return {"status": "ok", "service": "applymap-api"}
 
 
 @app.get("/")
 def root():
-    return {"message": "SourceLock API", "docs": "/docs"}
+    return {"message": "ApplyMap API", "docs": "/docs"}

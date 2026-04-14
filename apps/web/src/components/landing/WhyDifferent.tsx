@@ -4,43 +4,43 @@ export function WhyDifferent() {
   const comparisons = [
     {
       feature: "Tied to official university sources",
-      sourcelock: true,
+      applymap: true,
       chatgpt: false,
       counselor: "sometimes",
     },
     {
       feature: "University-specific weighting",
-      sourcelock: true,
+      applymap: true,
       chatgpt: false,
       counselor: "sometimes",
     },
     {
       feature: "Never invents facts",
-      sourcelock: true,
+      applymap: true,
       chatgpt: false,
       counselor: true,
     },
     {
       feature: "Source type + reliability labeled",
-      sourcelock: true,
+      applymap: true,
       chatgpt: false,
       counselor: false,
     },
     {
       feature: "Common App character limit enforced",
-      sourcelock: true,
+      applymap: true,
       chatgpt: false,
       counselor: "sometimes",
     },
     {
       feature: "International context aware",
-      sourcelock: true,
+      applymap: true,
       chatgpt: false,
       counselor: "sometimes",
     },
     {
       feature: "Affordable for all income levels",
-      sourcelock: true,
+      applymap: true,
       chatgpt: "partial",
       counselor: false,
     },
@@ -58,7 +58,7 @@ export function WhyDifferent() {
         <div className="mb-12 text-center">
           <h2 className="font-display mb-4 text-3xl font-bold text-slate-900">Why not just use ChatGPT?</h2>
           <p className="text-slate-500 max-w-xl mx-auto">
-            ChatGPT is a generative model. SourceLock is a guidance system with traceable sources.
+            ChatGPT is a generative model. ApplyMap is a guidance system with traceable sources.
             The difference matters when your application is on the line.
           </p>
         </div>
@@ -68,7 +68,7 @@ export function WhyDifferent() {
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="px-5 py-3 text-left text-sm font-medium text-slate-600">Feature</th>
-                <th className="px-5 py-3 text-center text-sm font-semibold text-navy-950">SourceLock</th>
+                <th className="px-5 py-3 text-center text-sm font-semibold text-navy-950">ApplyMap</th>
                 <th className="px-5 py-3 text-center text-sm font-medium text-slate-500">ChatGPT</th>
                 <th className="px-5 py-3 text-center text-sm font-medium text-slate-500">College Counselor</th>
               </tr>
@@ -80,7 +80,7 @@ export function WhyDifferent() {
                   className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}
                 >
                   <td className="px-5 py-3 text-sm text-slate-700">{row.feature}</td>
-                  <td className="px-5 py-3">{renderCell(row.sourcelock)}</td>
+                  <td className="px-5 py-3">{renderCell(row.applymap)}</td>
                   <td className="px-5 py-3">{renderCell(row.chatgpt)}</td>
                   <td className="px-5 py-3">{renderCell(row.counselor)}</td>
                 </tr>
