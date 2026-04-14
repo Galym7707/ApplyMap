@@ -80,6 +80,14 @@ export const achievementsApi = {
   create: (data: Record<string, unknown>) => api.post("/api/achievements", data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/api/achievements/${id}`, data),
   delete: (id: string) => api.delete(`/api/achievements/${id}`),
+  importAll: (file: File, wordLimit: number) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("word_limit", String(wordLimit));
+    return api.post("/api/achievements/import-all", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
   upload: (id: string, file: File) => {
     const formData = new FormData();
     formData.append("file", file);

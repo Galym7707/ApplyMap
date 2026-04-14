@@ -68,6 +68,27 @@ export interface EvidenceFile {
   uploaded_at: string;
 }
 
+export interface AchievementImportSelectionItem {
+  achievement_id: string;
+  type: AchievementType;
+  rank: number;
+  title: string;
+  common_app_text: string;
+  word_count: number;
+  character_count: number;
+  selection_reason?: string;
+}
+
+export interface AchievementImportResult {
+  file_name: string;
+  word_limit: number;
+  imported_count: number;
+  strongest_angle: string;
+  imported_achievements: Achievement[];
+  top_activities: AchievementImportSelectionItem[];
+  top_honors: AchievementImportSelectionItem[];
+}
+
 export type WeightPreset =
   | "research_heavy"
   | "leadership_heavy"
