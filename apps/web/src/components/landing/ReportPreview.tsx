@@ -6,7 +6,7 @@ export function ReportPreview() {
     <section className="px-6 py-20 bg-[#F9F8F6]">
       <div className="mx-auto max-w-5xl">
         <div className="mb-12 text-center">
-          <h2 className="mb-4 text-3xl font-bold text-slate-900">What a report looks like</h2>
+          <h2 className="font-display mb-4 text-3xl font-bold text-slate-900">What a report looks like</h2>
           <p className="text-slate-500">
             Every recommendation comes with a rationale and a source. No guesswork.
           </p>

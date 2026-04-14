@@ -56,7 +56,7 @@ export function WhyDifferent() {
     <section className="border-y border-slate-200 bg-white px-6 py-20">
       <div className="mx-auto max-w-4xl">
         <div className="mb-12 text-center">
-          <h2 className="mb-4 text-3xl font-bold text-slate-900">Why not just use ChatGPT?</h2>
+          <h2 className="font-display mb-4 text-3xl font-bold text-slate-900">Why not just use ChatGPT?</h2>
           <p className="text-slate-500 max-w-xl mx-auto">
             ChatGPT is a generative model. SourceLock is a guidance system with traceable sources.
             The difference matters when your application is on the line.

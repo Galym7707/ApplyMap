@@ -1,21 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { profileApi, universitiesApi, targetsApi } from "@/lib/api";
+import { profileApi, targetsApi, universitiesApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import type { University } from "@/types";
 
 const TOTAL_STEPS = 6;
+const STEP_TITLES = ["Academic context", "Major interests", "Test scores", "Preferences", "Target universities", "All set!"];
+const STEP_NOTES = [
+  "Anchor the profile to your curriculum and graduation timing.",
+  "This drives relevance in ranking and recommendations.",
+  "Add only the exams you already have.",
+  "These settings power the Common App recommender.",
+  "Choose a shortlist to carry into reports.",
+  "Move into the dashboard and start the workflow.",
+];
 
 const CURRICULA = ["NIS Programme (Kazakhstan/Cambridge)", "Kazakhstan National Curriculum", "UNT/ENT preparation track", "MESK / NIS Selection Exam", "IB (International Baccalaureate)", "A-Levels", "AP (Advanced Placement)", "French Baccalaureate", "German Abitur", "CBSE", "IGCSE", "National Curriculum", "Other"];
 const COUNTRIES = ["Afghanistan", "Albania", "Algeria", "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan", "Bangladesh", "Belgium", "Bolivia", "Brazil", "Cambodia", "Cameroon", "Canada", "Chile", "China", "Colombia", "Congo", "Costa Rica", "Croatia", "Cuba", "Czech Republic", "Denmark", "Ecuador", "Egypt", "Ethiopia", "Finland", "France", "Germany", "Ghana", "Greece", "Guatemala", "Honduras", "Hungary", "India", "Indonesia", "Iran", "Iraq", "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "South Korea", "Kuwait", "Lebanon", "Malaysia", "Mexico", "Morocco", "Nepal", "Netherlands", "New Zealand", "Nigeria", "Norway", "Pakistan", "Peru", "Philippines", "Poland", "Portugal", "Romania", "Russia", "Saudi Arabia", "Senegal", "Singapore", "South Africa", "Spain", "Sri Lanka", "Sweden", "Switzerland", "Syria", "Taiwan", "Tanzania", "Thailand", "Tunisia", "Turkey", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"];
@@ -25,17 +31,27 @@ function csvToArray(value: string) {
 }
 
 export default function OnboardingPage() {
-  const [step, setStep] = useState(1);
   const router = useRouter();
-  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [step, setStep] = useState(1);
   const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
 
-  const { data: universitiesData } = useQuery({
+  const { data: universitiesData, isLoading: isUniversitiesLoading } = useQuery({
     queryKey: ["universities"],
     queryFn: () => universitiesApi.list(),
   });
   const universities: University[] = universitiesData?.data?.data ?? [];
+
+  const filteredUniversities = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return universities;
+    return universities.filter((uni) =>
+      [uni.name, uni.country, uni.city, uni.short_description].filter(Boolean).some((value) =>
+        String(value).toLowerCase().includes(term)
+      )
+    );
+  }, [search, universities]);
 
   const updateProfileMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => profileApi.update(data),
@@ -64,29 +80,26 @@ export default function OnboardingPage() {
     },
   });
 
-  const progress = ((step - 1) / TOTAL_STEPS) * 100;
-
   const handleNext = async () => {
     const values = form.getValues();
 
     if (step === 1) {
       if (values.country) {
         await profileApi.updateUser({ country: values.country });
+        queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
       }
       await updateProfileMutation.mutateAsync({
-        graduation_year: values.graduation_year ? parseInt(values.graduation_year) : undefined,
+        graduation_year: values.graduation_year ? parseInt(values.graduation_year, 10) : undefined,
         curriculum: values.curriculum || undefined,
       });
     } else if (step === 2) {
-      await updateProfileMutation.mutateAsync({
-        intended_major: values.intended_major || undefined,
-      });
+      await updateProfileMutation.mutateAsync({ intended_major: values.intended_major || undefined });
     } else if (step === 3) {
       await updateProfileMutation.mutateAsync({
-        sat_score: values.sat_score ? parseInt(values.sat_score) : undefined,
-        act_score: values.act_score ? parseInt(values.act_score) : undefined,
+        sat_score: values.sat_score ? parseInt(values.sat_score, 10) : undefined,
+        act_score: values.act_score ? parseInt(values.act_score, 10) : undefined,
         ielts_score: values.ielts_score || undefined,
-        toefl_score: values.toefl_score ? parseInt(values.toefl_score) : undefined,
+        toefl_score: values.toefl_score ? parseInt(values.toefl_score, 10) : undefined,
       });
     } else if (step === 4) {
       await updateProfileMutation.mutateAsync({
@@ -94,255 +107,239 @@ export default function OnboardingPage() {
           preferred_countries: csvToArray(values.preferred_countries),
           preferred_regions: csvToArray(values.preferred_regions),
           teaching_language: values.teaching_language || undefined,
-          school_years: values.school_years ? parseInt(values.school_years) : undefined,
+          school_years: values.school_years ? parseInt(values.school_years, 10) : undefined,
           intended_major: values.intended_major || undefined,
           needs_full_ride: values.needs_full_ride,
         },
       });
     } else if (step === 5) {
-      // Add selected universities
-      for (const uid of selectedTargets) {
+      for (const universityId of selectedTargets) {
         try {
-          await addTargetMutation.mutateAsync(uid);
+          await addTargetMutation.mutateAsync(universityId);
         } catch {}
       }
     }
 
     if (step < TOTAL_STEPS) {
-      setStep((s) => s + 1);
+      setStep((current) => current + 1);
     } else {
       router.push("/dashboard");
     }
   };
 
-  const stepTitles = [
-    "Academic context",
-    "Major interests",
-    "Test scores",
-    "Preferences",
-    "Target universities",
-    "All set!",
-  ];
+  const selectedPreview = universities.filter((uni) => selectedTargets.includes(uni.id));
+  const isSaving = updateProfileMutation.isPending || addTargetMutation.isPending;
 
   return (
-    <div className="flex min-h-screen items-start justify-center bg-[#F9F8F6] px-4 py-12">
-      <div className="w-full max-w-lg">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <div className="mb-1 flex items-center justify-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-navy-950">
-              <span className="text-xs font-bold text-white">SL</span>
-            </div>
-            <span className="text-sm font-semibold text-slate-700">SourceLock</span>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900">Let&rsquo;s set up your profile</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Step {step} of {TOTAL_STEPS} — {stepTitles[step - 1]}
-          </p>
-        </div>
+    <div className="relative min-h-screen overflow-hidden bg-[#f7f5ef]">
+      <div className="absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top_left,_rgba(33,39,143,0.16),_transparent_42%),radial-gradient(circle_at_top_right,_rgba(15,118,110,0.12),_transparent_36%)]" />
+      <div className="absolute -left-12 top-24 h-56 w-56 rounded-full bg-amber-200/30 blur-3xl" />
+      <div className="absolute -right-12 bottom-0 h-72 w-72 rounded-full bg-navy-200/30 blur-3xl" />
 
-        {/* Progress */}
-        <Progress value={progress} className="mb-8 h-1.5" />
-
-        {/* Step content */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-          {step === 1 && (
-            <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-slate-900">Academic context</h2>
-              <div className="space-y-1.5">
-                <Label>Country</Label>
-                <select
-                  {...form.register("country")}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  <option value="">Select your country</option>
-                  {COUNTRIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Graduation year</Label>
-                <Input
-                  type="number"
-                  placeholder="2025"
-                  min={2024}
-                  max={2030}
-                  {...form.register("graduation_year")}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Curriculum</Label>
-                <select
-                  {...form.register("curriculum")}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  <option value="">Select your curriculum</option>
-                  {CURRICULA.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+      <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-4 py-8 lg:flex-row lg:px-8 lg:py-10">
+        <aside className="lg:w-[320px] lg:shrink-0">
+          <div className="rounded-[28px] border border-white/70 bg-white/85 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur">
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-navy-950 text-sm font-bold text-white">SL</div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">SourceLock</p>
+                <p className="text-sm font-medium text-slate-700">Profile setup</p>
               </div>
             </div>
-          )}
 
-          {step === 2 && (
-            <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-slate-900">What do you want to study?</h2>
-              <p className="text-sm text-slate-500">
-                This helps us weight your activities by major relevance. You can change it later.
-              </p>
-              <div className="space-y-1.5">
-                <Label>Intended major / field of study</Label>
-                <Input
-                  placeholder="e.g. Computer Science, Economics, Biology..."
-                  {...form.register("intended_major")}
-                />
+            <div className="rounded-2xl bg-slate-950 px-5 py-5 text-white">
+              <p className="text-xs uppercase tracking-[0.2em] text-white/60">Current step</p>
+              <h1 className="mt-3 text-2xl font-semibold">{STEP_TITLES[step - 1]}</h1>
+              <p className="mt-2 text-sm leading-relaxed text-white/72">{STEP_NOTES[step - 1]}</p>
+              <div className="mt-5">
+                <div className="mb-2 flex items-center justify-between text-xs text-white/70">
+                  <span>Progress</span>
+                  <span>{step}/{TOTAL_STEPS}</span>
+                </div>
+                <Progress value={(step / TOTAL_STEPS) * 100} className="h-1.5 bg-white/15" />
               </div>
             </div>
-          )}
 
-          {step === 3 && (
-            <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-slate-900">Test scores (optional)</h2>
-              <p className="text-sm text-slate-500">
-                All fields are optional. Only fill in scores you actually have.
-              </p>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>SAT</Label>
-                  <Input type="number" placeholder="1600" min={400} max={1600} {...form.register("sat_score")} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>ACT</Label>
-                  <Input type="number" placeholder="36" min={1} max={36} {...form.register("act_score")} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>IELTS</Label>
-                  <Input placeholder="7.5" {...form.register("ielts_score")} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>TOEFL</Label>
-                  <Input type="number" placeholder="110" min={0} max={120} {...form.register("toefl_score")} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-slate-900">Admissions preferences</h2>
-              <p className="text-sm text-slate-500">
-                This will be used for the Common App top 20 recommender. You can change it later.
-              </p>
-              <div className="space-y-1.5">
-                <Label>Preferred countries</Label>
-                <Input placeholder="United States, Canada..." {...form.register("preferred_countries")} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Preferred regions</Label>
-                <Input placeholder="USA, Canada, Hong Kong..." {...form.register("preferred_regions")} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Teaching language</Label>
-                  <Input placeholder="English" {...form.register("teaching_language")} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Years of school</Label>
-                  <Input type="number" min={10} max={13} placeholder="11" {...form.register("school_years")} />
-                </div>
-              </div>
-              <label className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm">
-                <input type="checkbox" {...form.register("needs_full_ride")} />
-                I need a full-ride or full-funding route
-              </label>
-            </div>
-          )}
-
-          {step === 5 && (
-            <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-slate-900">Select target universities</h2>
-              <p className="text-sm text-slate-500">
-                Pick the schools you&rsquo;re applying to. You can add or remove later.
-              </p>
-              <div className="space-y-2">
-                {universities.map((uni) => (
-                  <button
-                    key={uni.id}
-                    type="button"
-                    onClick={() =>
-                      setSelectedTargets((prev) =>
-                        prev.includes(uni.id) ? prev.filter((id) => id !== uni.id) : [...prev, uni.id]
-                      )
-                    }
-                    className={cn(
-                      "w-full rounded-lg border p-3 text-left transition-colors",
-                      selectedTargets.includes(uni.id)
-                        ? "border-navy-950 bg-navy-50"
-                        : "border-slate-200 hover:border-slate-300"
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-slate-900">{uni.name}</p>
-                        <p className="text-xs text-slate-500">{uni.country}</p>
-                      </div>
-                      <div
-                        className={cn(
-                          "h-4 w-4 rounded-full border-2",
-                          selectedTargets.includes(uni.id)
-                            ? "border-navy-950 bg-navy-950"
-                            : "border-slate-300"
-                        )}
-                      />
+            <div className="mt-5 space-y-2">
+              {STEP_TITLES.map((title, index) => {
+                const stepNumber = index + 1;
+                const isActive = stepNumber === step;
+                const isComplete = stepNumber < step;
+                return (
+                  <div key={title} className={cn("flex items-center gap-3 rounded-2xl border px-4 py-3", isActive ? "border-navy-200 bg-navy-50" : isComplete ? "border-emerald-100 bg-emerald-50/70" : "border-slate-200 bg-white")}>
+                    <div className={cn("flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold", isActive ? "bg-navy-950 text-white" : isComplete ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500")}>
+                      {isComplete ? "✓" : stepNumber}
                     </div>
-                  </button>
-                ))}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800">{title}</p>
+                      <p className="text-xs text-slate-500">{STEP_NOTES[index]}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </aside>
+
+        <main className="flex-1">
+          <div className="rounded-[32px] border border-white/70 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8 lg:p-10">
+            <div className="mb-8 flex flex-col gap-4 border-b border-slate-100 pb-6 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Step {step} of {TOTAL_STEPS}</p>
+                <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{STEP_TITLES[step - 1]}</h2>
+              </div>
+              <div className="grid grid-cols-3 gap-3 sm:w-[320px]">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"><p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Prefs</p><p className="mt-1 text-lg font-semibold text-slate-900">Saved</p></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"><p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Targets</p><p className="mt-1 text-lg font-semibold text-slate-900">{selectedTargets.length}</p></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"><p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Ready</p><p className="mt-1 text-lg font-semibold text-slate-900">{Math.round((step / TOTAL_STEPS) * 100)}%</p></div>
               </div>
             </div>
-          )}
 
-          {step === 6 && (
-            <div className="py-4 text-center space-y-4">
-              <div className="flex justify-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
-                  <span className="text-3xl">🎯</span>
+            {step === 1 && (
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2"><p className="text-sm leading-relaxed text-slate-500">We use this context to calibrate fit, shortlist suggestions, and the first report narrative.</p></div>
+                <div className="space-y-2">
+                  <Label>Country</Label>
+                  <select {...form.register("country")} className="flex h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm shadow-sm outline-none transition focus:border-navy-300 focus:ring-2 focus:ring-navy-100">
+                    <option value="">Select your country</option>
+                    {COUNTRIES.map((country) => <option key={country} value={country}>{country}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Graduation year</Label>
+                  <Input type="number" min={2024} max={2035} placeholder="2026" className="h-11 rounded-xl" {...form.register("graduation_year")} />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Curriculum</Label>
+                  <select {...form.register("curriculum")} className="flex h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm shadow-sm outline-none transition focus:border-navy-300 focus:ring-2 focus:ring-navy-100">
+                    <option value="">Select your curriculum</option>
+                    {CURRICULA.map((curriculum) => <option key={curriculum} value={curriculum}>{curriculum}</option>)}
+                  </select>
                 </div>
               </div>
-              <h2 className="text-xl font-bold text-slate-900">Profile complete!</h2>
-              <p className="text-sm text-slate-500">
-                Now add your activities and honors to your vault, then generate your first optimization report.
-              </p>
-            </div>
-          )}
-
-          <div className="mt-8 flex justify-between">
-            {step > 1 ? (
-              <Button variant="outline" onClick={() => setStep((s) => s - 1)}>
-                Back
-              </Button>
-            ) : (
-              <div />
             )}
-            <Button
-              className="bg-navy-950 text-white hover:bg-navy-900"
-              onClick={handleNext}
-              disabled={updateProfileMutation.isPending}
-            >
-              {step === TOTAL_STEPS ? "Go to dashboard" : "Continue"}
-            </Button>
-          </div>
-        </div>
 
-        {step < TOTAL_STEPS && (
-          <button
-            className="mt-4 w-full text-sm text-slate-400 hover:text-slate-600"
-            onClick={() => router.push("/dashboard")}
-          >
-            Skip for now
-          </button>
-        )}
+            {step === 2 && (
+              <div className="space-y-6">
+                <p className="text-sm leading-relaxed text-slate-500">This field has outsized impact on recommendation quality, so it is worth setting clearly now.</p>
+                <div className="grid gap-4 md:grid-cols-3">
+                  {["Computer Science", "Economics", "Mechanical Engineering"].map((suggestion) => (
+                    <button key={suggestion} type="button" onClick={() => form.setValue("intended_major", suggestion)} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left transition hover:border-navy-300 hover:bg-navy-50">
+                      <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Quick fill</p>
+                      <p className="mt-2 text-sm font-medium text-slate-900">{suggestion}</p>
+                    </button>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  <Label>Intended major or field of study</Label>
+                  <Input placeholder="e.g. Computer Science, Petroleum Engineering, Economics" className="h-11 rounded-xl" {...form.register("intended_major")} />
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2"><p className="text-sm leading-relaxed text-slate-500">These inputs are optional. Skip anything you do not already have.</p></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>SAT</Label><Input type="number" min={400} max={1600} placeholder="1450" className="mt-2 h-11 rounded-xl" {...form.register("sat_score")} /></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>ACT</Label><Input type="number" min={1} max={36} placeholder="32" className="mt-2 h-11 rounded-xl" {...form.register("act_score")} /></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>IELTS</Label><Input placeholder="7.5" className="mt-2 h-11 rounded-xl" {...form.register("ielts_score")} /></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>TOEFL</Label><Input type="number" min={0} max={120} placeholder="105" className="mt-2 h-11 rounded-xl" {...form.register("toefl_score")} /></div>
+              </div>
+            )}
+
+            {step === 4 && (
+              <div className="grid gap-5 xl:grid-cols-[1.4fr_0.9fr]">
+                <div className="space-y-5">
+                  <div className="space-y-2"><Label>Preferred countries</Label><Input placeholder="United States, Canada, UAE" className="h-11 rounded-xl" {...form.register("preferred_countries")} /></div>
+                  <div className="space-y-2"><Label>Preferred regions</Label><Input placeholder="USA, Abu Dhabi / UAE, Canada" className="h-11 rounded-xl" {...form.register("preferred_regions")} /></div>
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div className="space-y-2"><Label>Teaching language</Label><Input placeholder="English" className="h-11 rounded-xl" {...form.register("teaching_language")} /></div>
+                    <div className="space-y-2"><Label>Years of school completed</Label><Input type="number" min={10} max={13} placeholder="11" className="h-11 rounded-xl" {...form.register("school_years")} /></div>
+                  </div>
+                </div>
+                <div className="rounded-3xl bg-slate-950 p-5 text-white">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">Funding posture</p>
+                  <h3 className="mt-3 text-xl font-semibold">Tell the recommender how strict to be.</h3>
+                  <label className="mt-5 flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm leading-relaxed text-white/82">
+                    <input type="checkbox" className="mt-1 h-4 w-4 rounded border-white/30" {...form.register("needs_full_ride")} />
+                    <span>I need a full-ride or full-funding route. Keep the shortlist anchored to realistic affordability.</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {step === 5 && (
+              <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+                <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="mb-3 flex items-end justify-between gap-3">
+                    <div><p className="text-sm font-semibold text-slate-900">Available universities</p><p className="text-xs text-slate-500">{filteredUniversities.length} shown</p></div>
+                    <div className="w-full max-w-xs"><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by university or country" className="h-11 rounded-xl bg-white" /></div>
+                  </div>
+                  <div className="max-h-[26rem] space-y-2 overflow-y-auto pr-1">
+                    {isUniversitiesLoading ? Array.from({ length: 5 }).map((_, index) => (
+                      <div key={index} className="animate-pulse rounded-2xl border border-slate-200 bg-white px-4 py-4"><div className="h-4 w-40 rounded bg-slate-200" /><div className="mt-2 h-3 w-24 rounded bg-slate-100" /></div>
+                    )) : filteredUniversities.length ? filteredUniversities.map((university) => {
+                      const isSelected = selectedTargets.includes(university.id);
+                      return (
+                        <button key={university.id} type="button" onClick={() => setSelectedTargets((current) => current.includes(university.id) ? current.filter((id) => id !== university.id) : [...current, university.id])} className={cn("w-full rounded-2xl border px-4 py-4 text-left transition", isSelected ? "border-navy-300 bg-navy-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50")}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{university.name}</p>
+                              <p className="mt-1 text-xs text-slate-500">{[university.country, university.city].filter(Boolean).join(" • ")}</p>
+                              {university.short_description && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-600">{university.short_description}</p>}
+                            </div>
+                            <div className={cn("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2", isSelected ? "border-navy-950 bg-navy-950 text-[10px] text-white" : "border-slate-300 bg-white")}>{isSelected ? "✓" : ""}</div>
+                          </div>
+                        </button>
+                      );
+                    }) : <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm text-slate-500">No universities match this search.</div>}
+                  </div>
+                </div>
+
+                <div className="rounded-3xl bg-slate-950 p-5 text-white">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">Selection summary</p>
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+                    <p className="text-3xl font-semibold">{selectedTargets.length}</p>
+                    <p className="mt-1 text-sm text-white/70">universities selected</p>
+                  </div>
+                  <div className="mt-4 max-h-[18rem] space-y-2 overflow-y-auto pr-1">
+                    {selectedPreview.length ? selectedPreview.map((university) => (
+                      <div key={university.id} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                        <p className="text-sm font-medium text-white">{university.name}</p>
+                        <p className="mt-1 text-xs text-white/60">{university.country}</p>
+                      </div>
+                    )) : <div className="rounded-2xl border border-dashed border-white/15 px-4 py-8 text-center text-sm text-white/60">Pick a few targets to start the workflow with realistic examples.</div>}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {step === 6 && (
+              <div className="space-y-6 py-4 text-center">
+                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-4xl">🎯</div>
+                <div>
+                  <h3 className="text-3xl font-semibold tracking-tight text-slate-900">Profile complete</h3>
+                  <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-slate-500">You are ready to move into the dashboard, add achievements, and generate the first source-backed optimization report.</p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5"><p className="text-xs uppercase tracking-[0.16em] text-slate-400">Major</p><p className="mt-2 text-sm font-semibold text-slate-900">{form.getValues("intended_major") || "To be refined"}</p></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5"><p className="text-xs uppercase tracking-[0.16em] text-slate-400">Targets</p><p className="mt-2 text-sm font-semibold text-slate-900">{selectedTargets.length} selected</p></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5"><p className="text-xs uppercase tracking-[0.16em] text-slate-400">Next step</p><p className="mt-2 text-sm font-semibold text-slate-900">Fill the vault and generate reports</p></div>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-10 flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
+              {step > 1 ? <Button variant="outline" onClick={() => setStep((current) => current - 1)}>Back</Button> : <div />}
+              <div className="flex flex-col gap-3 sm:flex-row">
+                {step < TOTAL_STEPS && <Button variant="ghost" className="text-slate-500 hover:text-slate-700" onClick={() => router.push("/dashboard")}>Skip for now</Button>}
+                <Button className="bg-navy-950 text-white hover:bg-navy-900" onClick={handleNext} disabled={isSaving}>
+                  {isSaving ? "Saving..." : step === TOTAL_STEPS ? "Go to dashboard" : "Continue"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     </div>
   );
