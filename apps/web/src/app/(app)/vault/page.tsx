@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { achievementsApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -15,9 +16,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Pencil, Trash2, AlertTriangle, CheckCircle, Info } from "lucide-react";
+import {
+  Plus, Pencil, Trash2, AlertTriangle, CheckCircle, Info, GripVertical,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Achievement } from "@/types";
+
+// ─── Form schema ────────────────────────────────────────────────────────────
 
 const achievementSchema = z.object({
   type: z.enum(["activity", "honor"]),
@@ -28,22 +34,23 @@ const achievementSchema = z.object({
   category: z.string().optional(),
   hours_per_week: z.string().optional(),
   weeks_per_year: z.string().optional(),
-  impact_scope: z.enum(["school", "local", "regional", "national", "international", "family", "personal", ""]).optional(),
+  impact_scope: z
+    .enum(["school", "local", "regional", "national", "international", "family", "personal", ""])
+    .optional(),
   leadership_level: z.enum(["none", "member", "lead", "founder", "captain", ""]).optional(),
   major_relevance_score: z.string().optional(),
   continuity_score: z.string().optional(),
   selectivity_score: z.string().optional(),
   distinctiveness_score: z.string().optional(),
 });
-
 type FormData = z.infer<typeof achievementSchema>;
 
-function getStatusBadge(achievement: Achievement) {
+// ─── Status helpers ──────────────────────────────────────────────────────────
+
+function getStatus(achievement: Achievement) {
   const desc = achievement.description_raw ?? "";
   const hasAllScores =
-    achievement.major_relevance_score != null &&
-    achievement.selectivity_score != null;
-
+    achievement.major_relevance_score != null && achievement.selectivity_score != null;
   if (achievement.truth_risk_flag) {
     return { label: "Review Needed", variant: "destructive" as const, icon: AlertTriangle };
   }
@@ -52,6 +59,93 @@ function getStatusBadge(achievement: Achievement) {
   }
   return { label: "Strong", variant: "success" as const, icon: CheckCircle };
 }
+
+// ─── Score bar ───────────────────────────────────────────────────────────────
+
+function ScoreBar({ label, value }: { label: string; value?: number | null }) {
+  const pct = value != null ? Math.min((value / 10) * 100, 100) : 0;
+  const fillClass =
+    value == null
+      ? ""
+      : value >= 7
+      ? "bg-emerald-500"
+      : value >= 4
+      ? "bg-amber-400"
+      : "bg-red-400";
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[10px] leading-none text-slate-400">{label}</span>
+        <span className="text-[10px] font-medium tabular-nums text-slate-500">
+          {value != null ? value : "—"}
+        </span>
+      </div>
+      <div className="h-1 w-full rounded-full bg-slate-100">
+        {value != null && (
+          <div
+            className={`h-1 rounded-full transition-all duration-300 ${fillClass}`}
+            style={{ width: `${pct}%` }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Empty vault state ───────────────────────────────────────────────────────
+
+function EmptyVaultState({
+  type,
+  onAdd,
+}: {
+  type: "activity" | "honor";
+  onAdd: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border-2 border-dashed border-slate-200 bg-white px-10 py-14 text-center">
+      {/* Vault door illustration */}
+      <svg width="64" height="72" viewBox="0 0 64 72" fill="none" aria-hidden="true">
+        <rect x="8" y="8" width="48" height="56" rx="6" fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="1.5" />
+        <circle cx="17" cy="22" r="3" fill="#E2E8F0" />
+        <circle cx="17" cy="50" r="3" fill="#E2E8F0" />
+        <circle cx="36" cy="36" r="10" fill="white" stroke="#CBD5E1" strokeWidth="1.5" />
+        <circle cx="36" cy="36" r="4" fill="#E2E8F0" />
+        <line x1="36" y1="26" x2="36" y2="30" stroke="#CBD5E1" strokeWidth="1.5" />
+        <line x1="36" y1="42" x2="36" y2="46" stroke="#CBD5E1" strokeWidth="1.5" />
+        <line x1="26" y1="36" x2="30" y2="36" stroke="#CBD5E1" strokeWidth="1.5" />
+        <line x1="42" y1="36" x2="46" y2="36" stroke="#CBD5E1" strokeWidth="1.5" />
+        <rect x="49" y="33" width="7" height="6" rx="2" fill="#E2E8F0" />
+      </svg>
+
+      <h3 className="mt-5 text-sm font-semibold text-slate-700">
+        {type === "activity" ? "Your activity vault is empty" : "No honors added yet"}
+      </h3>
+      <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-slate-400">
+        {type === "activity"
+          ? "Add clubs, research, jobs, competitions — anything you've done outside class."
+          : "Add academic prizes, scholarships, and awards you've received."}
+      </p>
+      <Button
+        size="sm"
+        className="mt-6 gap-1.5 bg-navy-950 text-white hover:bg-navy-900"
+        onClick={onAdd}
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Add {type === "activity" ? "first activity" : "first honor"}
+      </Button>
+    </div>
+  );
+}
+
+// ─── Achievement modal ───────────────────────────────────────────────────────
+
+const SCORE_FIELDS = [
+  { name: "major_relevance_score", label: "Major relevance" },
+  { name: "selectivity_score", label: "Selectivity" },
+  { name: "continuity_score", label: "Continuity" },
+  { name: "distinctiveness_score", label: "Distinctiveness" },
+] as const;
 
 function AchievementModal({
   open,
@@ -66,7 +160,7 @@ function AchievementModal({
 }) {
   const queryClient = useQueryClient();
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(achievementSchema),
     defaultValues: editing
       ? {
@@ -80,11 +174,7 @@ function AchievementModal({
           impact_scope: editing.impact_scope ?? "",
           leadership_level: editing.leadership_level ?? "",
         }
-      : {
-          type: defaultType,
-          impact_scope: "",
-          leadership_level: "",
-        },
+      : { type: defaultType, impact_scope: "", leadership_level: "" },
   });
 
   const createMutation = useMutation({
@@ -111,14 +201,17 @@ function AchievementModal({
       ...raw,
       hours_per_week: raw.hours_per_week ? parseFloat(raw.hours_per_week) : undefined,
       weeks_per_year: raw.weeks_per_year ? parseInt(raw.weeks_per_year) : undefined,
-      major_relevance_score: raw.major_relevance_score ? parseFloat(raw.major_relevance_score) : undefined,
+      major_relevance_score: raw.major_relevance_score
+        ? parseFloat(raw.major_relevance_score)
+        : undefined,
       continuity_score: raw.continuity_score ? parseFloat(raw.continuity_score) : undefined,
       selectivity_score: raw.selectivity_score ? parseFloat(raw.selectivity_score) : undefined,
-      distinctiveness_score: raw.distinctiveness_score ? parseFloat(raw.distinctiveness_score) : undefined,
+      distinctiveness_score: raw.distinctiveness_score
+        ? parseFloat(raw.distinctiveness_score)
+        : undefined,
       impact_scope: raw.impact_scope || undefined,
       leadership_level: raw.leadership_level || undefined,
     };
-
     if (editing) {
       updateMutation.mutate({ id: editing.id, data });
     } else {
@@ -128,9 +221,32 @@ function AchievementModal({
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
+  // Live score values for slider display
+  const watchedScores = watch([
+    "major_relevance_score",
+    "selectivity_score",
+    "continuity_score",
+    "distinctiveness_score",
+  ]);
+
+  const scoreDisplay = (raw: string | undefined) => {
+    if (!raw && raw !== "0") return "—";
+    const n = parseFloat(raw);
+    if (isNaN(n)) return "—";
+    return n.toFixed(1);
+  };
+
+  const scoreColor = (raw: string | undefined) => {
+    const n = raw ? parseFloat(raw) : NaN;
+    if (isNaN(n)) return "text-slate-300";
+    if (n >= 7) return "text-emerald-600";
+    if (n >= 4) return "text-amber-600";
+    return "text-red-500";
+  };
+
   return (
     <Dialog open={open} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit achievement" : "Add achievement"}</DialogTitle>
         </DialogHeader>
@@ -156,7 +272,7 @@ function AchievementModal({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Description (raw — use your own words)</Label>
+            <Label>Description (use your own words)</Label>
             <Textarea
               rows={3}
               placeholder="Describe what you did, your responsibilities, and impact..."
@@ -187,9 +303,9 @@ function AchievementModal({
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
               >
                 <option value="">Select scope</option>
-                {["school", "local", "regional", "national", "international", "family", "personal"].map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
+                {["school", "local", "regional", "national", "international", "family", "personal"].map(
+                  (s) => <option key={s} value={s}>{s}</option>
+                )}
               </select>
             </div>
             <div className="space-y-1.5">
@@ -206,34 +322,46 @@ function AchievementModal({
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <p className="mb-3 text-xs font-medium text-slate-600 uppercase tracking-wider">Scores (0–10, optional — improves report quality)</p>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { name: "major_relevance_score", label: "Major relevance" },
-                { name: "selectivity_score", label: "Selectivity" },
-                { name: "continuity_score", label: "Continuity" },
-                { name: "distinctiveness_score", label: "Distinctiveness" },
-              ].map((field) => (
-                <div key={field.name} className="space-y-1.5">
-                  <Label className="text-xs">{field.label}</Label>
-                  <Input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="10"
-                    placeholder="0–10"
-                    {...register(field.name as keyof FormData)}
-                  />
-                </div>
-              ))}
+          {/* Score sliders */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+            <p className="mb-5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Scores — 0 to 10 &nbsp;·&nbsp; optional, improves report quality
+            </p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+              {SCORE_FIELDS.map((field, idx) => {
+                const raw = watchedScores[idx] as string | undefined;
+                return (
+                  <div key={field.name} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-slate-600">{field.label}</Label>
+                      <span className={`text-sm font-semibold tabular-nums ${scoreColor(raw)}`}>
+                        {scoreDisplay(raw)}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      className="score-slider"
+                      {...register(field.name)}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={isPending} className="bg-navy-950 text-white hover:bg-navy-900">
-              {isPending ? "Saving..." : editing ? "Save changes" : "Add achievement"}
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isPending}
+              className="bg-navy-950 text-white hover:bg-navy-900"
+            >
+              {isPending ? "Saving…" : editing ? "Save changes" : "Add achievement"}
             </Button>
           </DialogFooter>
         </form>
@@ -242,47 +370,121 @@ function AchievementModal({
   );
 }
 
+// ─── Achievement card ────────────────────────────────────────────────────────
+
 function AchievementCard({
   achievement,
+  rank,
   onEdit,
   onDelete,
+  isDragging = false,
+  isDragOver = false,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
 }: {
   achievement: Achievement;
+  rank?: number;
   onEdit: () => void;
   onDelete: () => void;
+  isDragging?: boolean;
+  isDragOver?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
 }) {
-  const status = getStatusBadge(achievement);
+  const status = getStatus(achievement);
   const StatusIcon = status.icon;
 
+  const borderAccent =
+    status.variant === "success"
+      ? "border-l-emerald-500"
+      : status.variant === "warning"
+      ? "border-l-amber-400"
+      : "border-l-red-400";
+
+  const hasAnyScore =
+    achievement.major_relevance_score != null ||
+    achievement.selectivity_score != null ||
+    achievement.continuity_score != null ||
+    achievement.distinctiveness_score != null;
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors">
-      <div className="flex items-start justify-between gap-3">
+    <div
+      draggable={!!onDragStart}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={cn(
+        "rounded-xl border border-l-4 bg-white p-4 transition-all",
+        borderAccent,
+        "border-slate-200",
+        isDragging && "opacity-40 scale-[0.98]",
+        isDragOver && "ring-2 ring-navy-200 ring-offset-1",
+        onDragStart && "cursor-grab active:cursor-grabbing"
+      )}
+    >
+      <div className="flex items-start gap-3">
+        {/* Rank + drag handle */}
+        {rank != null && (
+          <div className="flex shrink-0 flex-col items-center gap-0.5 pt-0.5">
+            <span className="text-[10px] font-bold text-slate-400">#{rank}</span>
+            <GripVertical className="h-3.5 w-3.5 text-slate-300" />
+          </div>
+        )}
+
+        {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2 mb-1">
-            <h3 className="font-medium text-slate-900 text-sm truncate">{achievement.title}</h3>
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <h3 className="truncate text-sm font-medium text-slate-900">{achievement.title}</h3>
             <Badge variant={status.variant} className="flex items-center gap-1 text-xs">
               <StatusIcon className="h-3 w-3" />
               {status.label}
             </Badge>
           </div>
+
           {achievement.organization_name && (
             <p className="text-xs text-slate-500 mb-1">{achievement.organization_name}</p>
           )}
           {achievement.description_raw && (
             <p className="text-xs text-slate-600 line-clamp-2">{achievement.description_raw}</p>
           )}
-          <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
+
+          {/* Meta tags */}
+          <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-slate-400">
             {achievement.impact_scope && <span>Scope: {achievement.impact_scope}</span>}
-            {achievement.leadership_level && <span>· Leadership: {achievement.leadership_level}</span>}
+            {achievement.leadership_level && (
+              <span>· Leadership: {achievement.leadership_level}</span>
+            )}
             {achievement.hours_per_week && <span>· {achievement.hours_per_week}h/wk</span>}
             {achievement.category && <span>· {achievement.category}</span>}
           </div>
+
+          {/* Score bars */}
+          {hasAnyScore && (
+            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+              <ScoreBar label="Relevance" value={achievement.major_relevance_score} />
+              <ScoreBar label="Selectivity" value={achievement.selectivity_score} />
+              <ScoreBar label="Continuity" value={achievement.continuity_score} />
+              <ScoreBar label="Distinctive" value={achievement.distinctiveness_score} />
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+
+        {/* Actions */}
+        <div className="flex shrink-0 items-center gap-1">
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onEdit}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50" onClick={onDelete}>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 text-red-400 hover:bg-red-50 hover:text-red-600"
+            onClick={onDelete}
+          >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -291,11 +493,20 @@ function AchievementCard({
   );
 }
 
+// ─── Vault page ──────────────────────────────────────────────────────────────
+
 export default function VaultPage() {
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Achievement | undefined>();
   const [defaultType, setDefaultType] = useState<"activity" | "honor">("activity");
+
+  // Drag state
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  // Activity order (persisted to localStorage)
+  const [activityOrder, setActivityOrder] = useState<string[]>([]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["achievements"],
@@ -314,12 +525,69 @@ export default function VaultPage() {
   const activities = achievements.filter((a) => a.type === "activity");
   const honors = achievements.filter((a) => a.type === "honor");
 
+  // Load order from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("sourcelock_activity_order");
+      if (stored) setActivityOrder(JSON.parse(stored));
+    } catch {}
+  }, []);
+
+  // Keep order in sync: new items appended, deleted items removed
+  useEffect(() => {
+    if (activities.length === 0) return;
+    setActivityOrder((prev) => {
+      const ids = new Set(activities.map((a) => a.id));
+      const kept = prev.filter((id) => ids.has(id));
+      const added = activities.filter((a) => !prev.includes(a.id)).map((a) => a.id);
+      return [...kept, ...added];
+    });
+  }, [activities]);
+
+  const sortedActivities = useMemo(() => {
+    if (activityOrder.length === 0) return activities;
+    return [...activities].sort((a, b) => {
+      const ai = activityOrder.indexOf(a.id);
+      const bi = activityOrder.indexOf(b.id);
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+  }, [activities, activityOrder]);
+
+  const saveOrder = (newOrder: string[]) => {
+    setActivityOrder(newOrder);
+    try {
+      localStorage.setItem("sourcelock_activity_order", JSON.stringify(newOrder));
+    } catch {}
+  };
+
+  const handleDragStart = (id: string) => setDraggingId(id);
+  const handleDragEnd = () => { setDraggingId(null); setDragOverId(null); };
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (id !== draggingId) setDragOverId(id);
+  };
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggingId || draggingId === targetId) { handleDragEnd(); return; }
+    const newOrder = [...activityOrder];
+    const from = newOrder.indexOf(draggingId);
+    const to = newOrder.indexOf(targetId);
+    if (from !== -1 && to !== -1) {
+      newOrder.splice(from, 1);
+      newOrder.splice(to, 0, draggingId);
+      saveOrder(newOrder);
+    }
+    handleDragEnd();
+  };
+
   const handleAdd = (type: "activity" | "honor") => {
     setEditing(undefined);
     setDefaultType(type);
     setModalOpen(true);
   };
-
   const handleEdit = (a: Achievement) => {
     setEditing(a);
     setDefaultType(a.type);
@@ -338,57 +606,111 @@ export default function VaultPage() {
       </div>
 
       <Tabs defaultValue="activities">
-        <div className="flex items-center justify-between mb-4">
+        <div className="mb-4 flex items-center justify-between">
           <TabsList>
-            <TabsTrigger value="activities">Activities ({activities.length})</TabsTrigger>
-            <TabsTrigger value="honors">Honors ({honors.length})</TabsTrigger>
+            {/* Tab with styled counter badge */}
+            <TabsTrigger value="activities" className="gap-2">
+              Activities
+              <span className="rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-semibold text-navy-800">
+                {activities.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="honors" className="gap-2">
+              Honors
+              <span className="rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-semibold text-navy-800">
+                {honors.length}
+              </span>
+            </TabsTrigger>
           </TabsList>
+
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => handleAdd("honor")} className="gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleAdd("honor")}
+              className="gap-1.5"
+            >
               <Plus className="h-3.5 w-3.5" /> Add honor
             </Button>
-            <Button size="sm" className="bg-navy-950 text-white hover:bg-navy-900 gap-1.5" onClick={() => handleAdd("activity")}>
+            <Button
+              size="sm"
+              className="gap-1.5 bg-navy-950 text-white hover:bg-navy-900"
+              onClick={() => handleAdd("activity")}
+            >
               <Plus className="h-3.5 w-3.5" /> Add activity
             </Button>
           </div>
         </div>
 
+        {/* Activities tab */}
         <TabsContent value="activities">
           {isLoading ? (
-            <p className="text-sm text-slate-500">Loading...</p>
-          ) : activities.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
-              <p className="text-slate-500 mb-3">No activities yet.</p>
-              <Button size="sm" className="bg-navy-950 text-white" onClick={() => handleAdd("activity")}>
-                <Plus className="h-3.5 w-3.5 mr-1.5" /> Add your first activity
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {activities.map((a) => (
-                <AchievementCard
-                  key={a.id}
-                  achievement={a}
-                  onEdit={() => handleEdit(a)}
-                  onDelete={() => deleteMutation.mutate(a.id)}
-                />
+            <div className="space-y-2.5">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-slate-100 bg-white p-4">
+                  <div className="flex items-start gap-3">
+                    <Skeleton className="h-5 w-5 rounded-full shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-48" />
+                      <Skeleton className="h-3 w-32" />
+                      <div className="grid grid-cols-4 gap-1.5 pt-1">
+                        {Array.from({ length: 4 }).map((_, j) => (
+                          <Skeleton key={j} className="h-1 w-full rounded-full" />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
+          ) : activities.length === 0 ? (
+            <EmptyVaultState type="activity" onAdd={() => handleAdd("activity")} />
+          ) : (
+            <>
+              <p className="mb-3 text-xs text-slate-400">
+                Drag to reorder · Common App shows activities in this order
+              </p>
+              <div className="space-y-2.5">
+                {sortedActivities.map((a, i) => (
+                  <AchievementCard
+                    key={a.id}
+                    achievement={a}
+                    rank={i + 1}
+                    onEdit={() => handleEdit(a)}
+                    onDelete={() => deleteMutation.mutate(a.id)}
+                    isDragging={draggingId === a.id}
+                    isDragOver={dragOverId === a.id}
+                    onDragStart={() => handleDragStart(a.id)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, a.id)}
+                    onDrop={(e) => handleDrop(e, a.id)}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </TabsContent>
 
+        {/* Honors tab */}
         <TabsContent value="honors">
           {isLoading ? (
-            <p className="text-sm text-slate-500">Loading...</p>
-          ) : honors.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
-              <p className="text-slate-500 mb-3">No honors yet.</p>
-              <Button size="sm" className="bg-navy-950 text-white" onClick={() => handleAdd("honor")}>
-                <Plus className="h-3.5 w-3.5 mr-1.5" /> Add your first honor
-              </Button>
+            <div className="space-y-2.5">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-slate-100 bg-white p-4">
+                  <div className="flex items-start gap-3">
+                    <Skeleton className="h-5 w-5 rounded-full shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
+          ) : honors.length === 0 ? (
+            <EmptyVaultState type="honor" onAdd={() => handleAdd("honor")} />
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {honors.map((a) => (
                 <AchievementCard
                   key={a.id}

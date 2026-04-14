@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Lock } from "lucide-react";
 
 export function LandingFooter() {
   return (
@@ -7,9 +8,9 @@ export function LandingFooter() {
         <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
           <div className="flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded bg-navy-950">
-              <span className="text-[10px] font-bold text-white">SL</span>
+              <Lock className="h-3.5 w-3.5 text-white" />
             </div>
-            <span className="text-sm font-semibold text-slate-700">SourceLock</span>
+            <span className="font-display text-sm font-semibold text-slate-700">SourceLock</span>
           </div>
 
           <div className="flex items-center gap-6 text-xs text-slate-500">

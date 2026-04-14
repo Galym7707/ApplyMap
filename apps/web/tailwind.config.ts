@@ -63,7 +63,8 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["Montserrat", "system-ui", "sans-serif"],
+        display: ["Cinzel", "Georgia", "serif"],
       },
       keyframes: {
         "accordion-down": {
@@ -78,11 +79,21 @@ const config: Config = {
           from: { opacity: "0", transform: "translateY(8px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        "badge-glow": {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(20, 21, 84, 0)" },
+          "50%": { boxShadow: "0 0 0 5px rgba(20, 21, 84, 0.07)" },
+        },
+        "badge-float": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-3px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.4s ease-out",
+        "badge-glow": "badge-glow 4s ease-in-out infinite",
+        "badge-float": "badge-float 3s ease-in-out infinite",
       },
     },
   },

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function LandingNav() {
@@ -7,21 +8,32 @@ export function LandingNav() {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Link href="/" className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded bg-navy-950">
-            <span className="text-xs font-bold text-white">SL</span>
+            <Lock className="h-4 w-4 text-white" />
           </div>
-          <span className="text-base font-semibold text-slate-900">SourceLock</span>
+          <span className="font-display text-base font-semibold text-slate-900">SourceLock</span>
         </Link>
+
         <div className="hidden items-center gap-8 md:flex">
-          <Link href="#how-it-works" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
+          <Link
+            href="#how-it-works"
+            className="text-sm text-slate-600 transition-colors hover:text-slate-900"
+          >
             How it works
           </Link>
-          <Link href="#pricing" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
+          <Link
+            href="#pricing"
+            className="text-sm text-slate-600 transition-colors hover:text-slate-900"
+          >
             Pricing
           </Link>
-          <Link href="#faq" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
+          <Link
+            href="#faq"
+            className="text-sm text-slate-600 transition-colors hover:text-slate-900"
+          >
             FAQ
           </Link>
         </div>
+
         <div className="flex items-center gap-3">
           <Link href="/sign-in">
             <Button variant="ghost" size="sm" className="text-slate-600">

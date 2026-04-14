@@ -42,7 +42,7 @@ export function FaqSection() {
     <section id="faq" className="border-t border-slate-200 bg-white px-6 py-20">
       <div className="mx-auto max-w-3xl">
         <div className="mb-12 text-center">
-          <h2 className="mb-4 text-3xl font-bold text-slate-900">Frequently asked questions</h2>
+          <h2 className="font-display mb-4 text-3xl font-bold text-slate-900">Frequently asked questions</h2>
         </div>
 
         <div className="divide-y divide-slate-200">

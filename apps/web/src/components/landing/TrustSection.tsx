@@ -32,7 +32,7 @@ export function TrustSection() {
     <section className="border-y border-slate-200 bg-white px-6 py-20">
       <div className="mx-auto max-w-5xl">
         <div className="mb-12 text-center">
-          <h2 className="mb-4 text-3xl font-bold text-slate-900">Privacy and transparency</h2>
+          <h2 className="font-display mb-4 text-3xl font-bold text-slate-900">Privacy and transparency</h2>
           <p className="text-slate-500">
             We take both seriously. Here&rsquo;s exactly what we do — and don&rsquo;t do.
           </p>
