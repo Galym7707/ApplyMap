@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Enum, Integer
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Enum, Integer, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import enum
@@ -51,6 +51,7 @@ class StudentProfile(Base):
     # Financial
     budget_range = Column(String(100), nullable=True)  # e.g. "50k-75k"
     aid_needed = Column(Boolean, nullable=True)
+    application_preferences_json = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

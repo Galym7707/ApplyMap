@@ -72,10 +72,29 @@ export const achievementsApi = {
 
 // Universities
 export const universitiesApi = {
-  list: (params?: { search?: string; country?: string }) =>
+  list: (params?: {
+    search?: string;
+    country?: string;
+    region?: string;
+    application_system?: string;
+    teaching_language?: string;
+    major?: string;
+    school_years?: string | number;
+    full_ride_only?: boolean;
+    common_app_only?: boolean;
+    aid_type?: string;
+    sort_by?: string;
+    sort_dir?: string;
+  }) =>
     api.get("/api/universities", { params }),
   get: (id: string) => api.get(`/api/universities/${id}`),
   getSources: (id: string) => api.get(`/api/universities/${id}/sources`),
+  recommendCommonApp: (data: {
+    top_honor_ids: string[];
+    top_activity_ids: string[];
+    preferences: Record<string, unknown>;
+    save_preferences?: boolean;
+  }) => api.post("/api/universities/recommendations/common-app", data),
 };
 
 // Targets

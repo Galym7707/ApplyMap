@@ -5,9 +5,11 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .database import Base, engine
 from .routes import auth, profile, achievements, universities, reports, admin
+from .schema_maintenance import ensure_application_schema
 
 # Create tables on startup (use Alembic migrations in production)
 Base.metadata.create_all(bind=engine)
+ensure_application_schema()
 
 app = FastAPI(
     title="SourceLock API",

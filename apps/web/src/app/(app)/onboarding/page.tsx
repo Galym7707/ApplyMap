@@ -15,10 +15,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import type { University } from "@/types";
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 const CURRICULA = ["NIS Programme (Kazakhstan/Cambridge)", "Kazakhstan National Curriculum", "UNT/ENT preparation track", "MESK / NIS Selection Exam", "IB (International Baccalaureate)", "A-Levels", "AP (Advanced Placement)", "French Baccalaureate", "German Abitur", "CBSE", "IGCSE", "National Curriculum", "Other"];
 const COUNTRIES = ["Afghanistan", "Albania", "Algeria", "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan", "Bangladesh", "Belgium", "Bolivia", "Brazil", "Cambodia", "Cameroon", "Canada", "Chile", "China", "Colombia", "Congo", "Costa Rica", "Croatia", "Cuba", "Czech Republic", "Denmark", "Ecuador", "Egypt", "Ethiopia", "Finland", "France", "Germany", "Ghana", "Greece", "Guatemala", "Honduras", "Hungary", "India", "Indonesia", "Iran", "Iraq", "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "South Korea", "Kuwait", "Lebanon", "Malaysia", "Mexico", "Morocco", "Nepal", "Netherlands", "New Zealand", "Nigeria", "Norway", "Pakistan", "Peru", "Philippines", "Poland", "Portugal", "Romania", "Russia", "Saudi Arabia", "Senegal", "Singapore", "South Africa", "Spain", "Sri Lanka", "Sweden", "Switzerland", "Syria", "Taiwan", "Tanzania", "Thailand", "Tunisia", "Turkey", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"];
+
+function csvToArray(value: string) {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(1);
@@ -52,6 +56,11 @@ export default function OnboardingPage() {
       act_score: "",
       ielts_score: "",
       toefl_score: "",
+      preferred_countries: "United States, United Arab Emirates, Canada",
+      preferred_regions: "USA, Abu Dhabi / UAE, Canada, Hong Kong, Korea, Japan, Europe",
+      teaching_language: "English",
+      school_years: "11",
+      needs_full_ride: true,
     },
   });
 
@@ -61,6 +70,9 @@ export default function OnboardingPage() {
     const values = form.getValues();
 
     if (step === 1) {
+      if (values.country) {
+        await profileApi.updateUser({ country: values.country });
+      }
       await updateProfileMutation.mutateAsync({
         graduation_year: values.graduation_year ? parseInt(values.graduation_year) : undefined,
         curriculum: values.curriculum || undefined,
@@ -77,6 +89,17 @@ export default function OnboardingPage() {
         toefl_score: values.toefl_score ? parseInt(values.toefl_score) : undefined,
       });
     } else if (step === 4) {
+      await updateProfileMutation.mutateAsync({
+        application_preferences_json: {
+          preferred_countries: csvToArray(values.preferred_countries),
+          preferred_regions: csvToArray(values.preferred_regions),
+          teaching_language: values.teaching_language || undefined,
+          school_years: values.school_years ? parseInt(values.school_years) : undefined,
+          intended_major: values.intended_major || undefined,
+          needs_full_ride: values.needs_full_ride,
+        },
+      });
+    } else if (step === 5) {
       // Add selected universities
       for (const uid of selectedTargets) {
         try {
@@ -96,6 +119,7 @@ export default function OnboardingPage() {
     "Academic context",
     "Major interests",
     "Test scores",
+    "Preferences",
     "Target universities",
     "All set!",
   ];
@@ -207,6 +231,37 @@ export default function OnboardingPage() {
 
           {step === 4 && (
             <div className="space-y-5">
+              <h2 className="text-lg font-semibold text-slate-900">Admissions preferences</h2>
+              <p className="text-sm text-slate-500">
+                This will be used for the Common App top 20 recommender. You can change it later.
+              </p>
+              <div className="space-y-1.5">
+                <Label>Preferred countries</Label>
+                <Input placeholder="United States, Canada..." {...form.register("preferred_countries")} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Preferred regions</Label>
+                <Input placeholder="USA, Canada, Hong Kong..." {...form.register("preferred_regions")} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Teaching language</Label>
+                  <Input placeholder="English" {...form.register("teaching_language")} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Years of school</Label>
+                  <Input type="number" min={10} max={13} placeholder="11" {...form.register("school_years")} />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm">
+                <input type="checkbox" {...form.register("needs_full_ride")} />
+                I need a full-ride or full-funding route
+              </label>
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="space-y-5">
               <h2 className="text-lg font-semibold text-slate-900">Select target universities</h2>
               <p className="text-sm text-slate-500">
                 Pick the schools you&rsquo;re applying to. You can add or remove later.
@@ -248,7 +303,7 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <div className="py-4 text-center space-y-4">
               <div className="flex justify-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">

@@ -19,6 +19,7 @@ export interface StudentProfile {
   toefl_score?: number;
   budget_range?: string;
   aid_needed?: boolean;
+  application_preferences_json?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -82,6 +83,35 @@ export interface University {
   short_description?: string;
   weight_preset: WeightPreset;
   is_active: boolean;
+  region?: string;
+  city?: string;
+  is_common_app?: boolean;
+  application_source_url?: string;
+  teaching_languages?: string[];
+  major_strengths?: string[];
+  education_years_required?: number;
+  school_years_note?: string;
+  aid_type?: string;
+  aid_strength?: number;
+  selectivity_score?: number;
+  full_ride_possible?: boolean;
+  full_tuition_possible?: boolean;
+  aid_notes?: string;
+  funding_source_url?: string;
+  funding_source_title?: string;
+  eligibility_notes?: string;
+}
+
+export interface CommonAppRecommendation {
+  university_id: string;
+  slug: string;
+  name: string;
+  country: string;
+  category: "dream" | "target" | "safe";
+  rationale: string;
+  fit_notes?: string;
+  aid_notes?: string;
+  funding_source_url?: string;
 }
 
 export interface PolicyEntry {
