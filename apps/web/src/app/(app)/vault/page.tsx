@@ -17,7 +17,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  Plus, Pencil, Trash2, AlertTriangle, CheckCircle, Info, GripVertical,
+  Plus, Pencil, Trash2, AlertTriangle, CheckCircle, Info, GripVertical, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -38,26 +38,47 @@ const achievementSchema = z.object({
     .enum(["school", "local", "regional", "national", "international", "family", "personal", ""])
     .optional(),
   leadership_level: z.enum(["none", "member", "lead", "founder", "captain", ""]).optional(),
-  major_relevance_score: z.string().optional(),
-  continuity_score: z.string().optional(),
-  selectivity_score: z.string().optional(),
-  distinctiveness_score: z.string().optional(),
 });
 type FormData = z.infer<typeof achievementSchema>;
+const ACTIVITY_ORDER_KEY = "applymap_activity_order";
+const LEGACY_ACTIVITY_ORDER_KEY = "sourcelock_activity_order";
+
+type ScoreFieldKey =
+  | "major_relevance_score"
+  | "selectivity_score"
+  | "continuity_score"
+  | "distinctiveness_score";
+
+const SCORE_FIELDS: { key: ScoreFieldKey; label: string }[] = [
+  { key: "major_relevance_score", label: "Major relevance" },
+  { key: "selectivity_score", label: "Selectivity" },
+  { key: "continuity_score", label: "Continuity" },
+  { key: "distinctiveness_score", label: "Distinctiveness" },
+];
 
 // ─── Status helpers ──────────────────────────────────────────────────────────
 
 function getStatus(achievement: Achievement) {
   const desc = achievement.description_raw ?? "";
-  const hasAllScores =
-    achievement.major_relevance_score != null && achievement.selectivity_score != null;
   if (achievement.truth_risk_flag) {
     return { label: "Review Needed", variant: "destructive" as const, icon: AlertTriangle };
   }
-  if (desc.length < 30 || !hasAllScores) {
+  if (desc.length < 30) {
     return { label: "Needs Detail", variant: "warning" as const, icon: Info };
   }
+  if (!hasChancellorScores(achievement)) {
+    return { label: "Analysis Pending", variant: "info" as const, icon: Sparkles };
+  }
   return { label: "Strong", variant: "success" as const, icon: CheckCircle };
+}
+
+function hasChancellorScores(achievement: Achievement) {
+  return SCORE_FIELDS.every((field) => typeof achievement[field.key] === "number");
+}
+
+function formatScore(value?: number | null) {
+  if (typeof value !== "number") return "Pending";
+  return value.toFixed(1).replace(/\.0$/, "");
 }
 
 // ─── Score bar ───────────────────────────────────────────────────────────────
@@ -78,7 +99,7 @@ function ScoreBar({ label, value }: { label: string; value?: number | null }) {
       <div className="mb-1 flex items-center justify-between">
         <span className="text-[10px] leading-none text-slate-400">{label}</span>
         <span className="text-[10px] font-medium tabular-nums text-slate-500">
-          {value != null ? value : "—"}
+          {formatScore(value)}
         </span>
       </div>
       <div className="h-1 w-full rounded-full bg-slate-100">
@@ -140,13 +161,6 @@ function EmptyVaultState({
 
 // ─── Achievement modal ───────────────────────────────────────────────────────
 
-const SCORE_FIELDS = [
-  { name: "major_relevance_score", label: "Major relevance" },
-  { name: "selectivity_score", label: "Selectivity" },
-  { name: "continuity_score", label: "Continuity" },
-  { name: "distinctiveness_score", label: "Distinctiveness" },
-] as const;
-
 function AchievementModal({
   open,
   onClose,
@@ -160,17 +174,13 @@ function AchievementModal({
 }) {
   const queryClient = useQueryClient();
 
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(achievementSchema),
     defaultValues: editing
       ? {
           ...editing,
           hours_per_week: editing.hours_per_week?.toString() ?? "",
           weeks_per_year: editing.weeks_per_year?.toString() ?? "",
-          major_relevance_score: editing.major_relevance_score?.toString() ?? "",
-          continuity_score: editing.continuity_score?.toString() ?? "",
-          selectivity_score: editing.selectivity_score?.toString() ?? "",
-          distinctiveness_score: editing.distinctiveness_score?.toString() ?? "",
           impact_scope: editing.impact_scope ?? "",
           leadership_level: editing.leadership_level ?? "",
         }
@@ -201,14 +211,6 @@ function AchievementModal({
       ...raw,
       hours_per_week: raw.hours_per_week ? parseFloat(raw.hours_per_week) : undefined,
       weeks_per_year: raw.weeks_per_year ? parseInt(raw.weeks_per_year) : undefined,
-      major_relevance_score: raw.major_relevance_score
-        ? parseFloat(raw.major_relevance_score)
-        : undefined,
-      continuity_score: raw.continuity_score ? parseFloat(raw.continuity_score) : undefined,
-      selectivity_score: raw.selectivity_score ? parseFloat(raw.selectivity_score) : undefined,
-      distinctiveness_score: raw.distinctiveness_score
-        ? parseFloat(raw.distinctiveness_score)
-        : undefined,
       impact_scope: raw.impact_scope || undefined,
       leadership_level: raw.leadership_level || undefined,
     };
@@ -220,29 +222,6 @@ function AchievementModal({
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
-
-  // Live score values for slider display
-  const watchedScores = watch([
-    "major_relevance_score",
-    "selectivity_score",
-    "continuity_score",
-    "distinctiveness_score",
-  ]);
-
-  const scoreDisplay = (raw: string | undefined) => {
-    if (!raw && raw !== "0") return "—";
-    const n = parseFloat(raw);
-    if (isNaN(n)) return "—";
-    return n.toFixed(1);
-  };
-
-  const scoreColor = (raw: string | undefined) => {
-    const n = raw ? parseFloat(raw) : NaN;
-    if (isNaN(n)) return "text-slate-300";
-    if (n >= 7) return "text-emerald-600";
-    if (n >= 4) return "text-amber-600";
-    return "text-red-500";
-  };
 
   return (
     <Dialog open={open} onOpenChange={() => onClose()}>
@@ -322,33 +301,16 @@ function AchievementModal({
             </div>
           </div>
 
-          {/* Score sliders */}
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-            <p className="mb-5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Scores — 0 to 10 &nbsp;·&nbsp; optional, improves report quality
-            </p>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-              {SCORE_FIELDS.map((field, idx) => {
-                const raw = watchedScores[idx] as string | undefined;
-                return (
-                  <div key={field.name} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs text-slate-600">{field.label}</Label>
-                      <span className={`text-sm font-semibold tabular-nums ${scoreColor(raw)}`}>
-                        {scoreDisplay(raw)}
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="10"
-                      step="0.5"
-                      className="score-slider"
-                      {...register(field.name)}
-                    />
-                  </div>
-                );
-              })}
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
+            <div className="flex gap-2">
+              <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">Chancellor analysis runs after saving.</p>
+                <p className="mt-1 text-xs text-blue-800">
+                  ApplyMap will estimate major relevance, selectivity, continuity, and
+                  distinctiveness from the achievement details.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -403,6 +365,8 @@ function AchievementCard({
       ? "border-l-emerald-500"
       : status.variant === "warning"
       ? "border-l-amber-400"
+      : status.variant === "info"
+      ? "border-l-blue-400"
       : "border-l-red-400";
 
   const hasAnyScore =
@@ -465,11 +429,17 @@ function AchievementCard({
 
           {/* Score bars */}
           {hasAnyScore && (
-            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
-              <ScoreBar label="Relevance" value={achievement.major_relevance_score} />
-              <ScoreBar label="Selectivity" value={achievement.selectivity_score} />
-              <ScoreBar label="Continuity" value={achievement.continuity_score} />
-              <ScoreBar label="Distinctive" value={achievement.distinctiveness_score} />
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+                Chancellor analysis
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <ScoreBar label="Relevance" value={achievement.major_relevance_score} />
+                <ScoreBar label="Selectivity" value={achievement.selectivity_score} />
+                <ScoreBar label="Continuity" value={achievement.continuity_score} />
+                <ScoreBar label="Distinctive" value={achievement.distinctiveness_score} />
+              </div>
             </div>
           )}
         </div>
@@ -528,7 +498,8 @@ export default function VaultPage() {
   // Load order from localStorage
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("sourcelock_activity_order");
+      const stored =
+        localStorage.getItem(ACTIVITY_ORDER_KEY) ?? localStorage.getItem(LEGACY_ACTIVITY_ORDER_KEY);
       if (stored) setActivityOrder(JSON.parse(stored));
     } catch {}
   }, []);
@@ -559,7 +530,8 @@ export default function VaultPage() {
   const saveOrder = (newOrder: string[]) => {
     setActivityOrder(newOrder);
     try {
-      localStorage.setItem("sourcelock_activity_order", JSON.stringify(newOrder));
+      localStorage.setItem(ACTIVITY_ORDER_KEY, JSON.stringify(newOrder));
+      localStorage.removeItem(LEGACY_ACTIVITY_ORDER_KEY);
     } catch {}
   };
 

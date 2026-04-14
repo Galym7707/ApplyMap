@@ -28,17 +28,17 @@ export function ProblemSection() {
             Why the Common App activities section is hard for international students
           </h2>
           <p className="text-slate-500">
-            You&rsquo;re not imagining it. The process genuinely has gaps that SourceLock closes.
+            You&rsquo;re not imagining it. The process genuinely has gaps that ApplyMap closes.
           </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          {/* Left: without SourceLock */}
+          {/* Left: without ApplyMap */}
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-7">
             <div className="mb-6 flex items-center gap-2.5">
               <div className="h-2 w-2 rounded-full bg-red-400" />
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Without SourceLock
+                Without ApplyMap
               </span>
             </div>
             <ul className="space-y-5">
@@ -51,12 +51,12 @@ export function ProblemSection() {
             </ul>
           </div>
 
-          {/* Right: with SourceLock */}
+          {/* Right: with ApplyMap */}
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-7">
             <div className="mb-6 flex items-center gap-2.5">
               <div className="h-2 w-2 rounded-full bg-emerald-500" />
               <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
-                With SourceLock
+                With ApplyMap
               </span>
             </div>
             <ul className="space-y-5">

@@ -1,6 +1,25 @@
 import axios from "axios";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const AUTH_TOKEN_KEY = "applymap_token";
+const LEGACY_AUTH_TOKEN_KEY = "sourcelock_token";
+
+export function getStoredAuthToken() {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(AUTH_TOKEN_KEY) ?? localStorage.getItem(LEGACY_AUTH_TOKEN_KEY);
+}
+
+export function setStoredAuthToken(token: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
+}
+
+export function clearStoredAuthToken() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
+}
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -13,7 +32,7 @@ export const api = axios.create({
 // Attach auth token from session if available
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("sourcelock_token");
+    const token = getStoredAuthToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -26,8 +45,12 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       if (typeof window !== "undefined") {
-        localStorage.removeItem("sourcelock_token");
-        window.location.href = "/sign-in";
+        const isAuthPage =
+          window.location.pathname === "/sign-in" || window.location.pathname === "/sign-up";
+        clearStoredAuthToken();
+        if (!isAuthPage) {
+          window.location.href = "/sign-in";
+        }
       }
     }
     return Promise.reject(error);

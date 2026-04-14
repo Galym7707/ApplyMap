@@ -5,15 +5,15 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: sourcelock
-      POSTGRES_PASSWORD: sourcelock
-      POSTGRES_DB: sourcelock_db
+      POSTGRES_USER: applymap
+      POSTGRES_PASSWORD: applymap
+      POSTGRES_DB: applymap_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sourcelock -d sourcelock_db"]
+      test: ["CMD-SHELL", "pg_isready -U applymap -d applymap_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,7 +26,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://sourcelock:sourcelock@db:5432/sourcelock_db
+      DATABASE_URL: postgresql://applymap:applymap@db:5432/applymap_db
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key}
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 60

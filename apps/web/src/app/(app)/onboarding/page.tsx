@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { ApplyMapLogo } from "@/components/brand/ApplyMapLogo";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -17,7 +18,19 @@ import type { University } from "@/types";
 
 const TOTAL_STEPS = 5;
 
-const CURRICULA = ["IB (International Baccalaureate)", "AP (Advanced Placement)", "A-Levels", "French Baccalaureate", "German Abitur", "CBSE", "IGCSE", "National Curriculum", "Other"];
+const CURRICULA = [
+  "NIS Grade 12 Certificate",
+  "IB (International Baccalaureate)",
+  "A-Levels",
+  "AP (Advanced Placement)",
+  "Kazakhstan National Curriculum",
+  "French Baccalaureate",
+  "German Abitur",
+  "CBSE",
+  "IGCSE",
+  "National Curriculum",
+  "Other",
+];
 const COUNTRIES = ["Afghanistan", "Albania", "Algeria", "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan", "Bangladesh", "Belgium", "Bolivia", "Brazil", "Cambodia", "Cameroon", "Canada", "Chile", "China", "Colombia", "Congo", "Costa Rica", "Croatia", "Cuba", "Czech Republic", "Denmark", "Ecuador", "Egypt", "Ethiopia", "Finland", "France", "Germany", "Ghana", "Greece", "Guatemala", "Honduras", "Hungary", "India", "Indonesia", "Iran", "Iraq", "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "South Korea", "Kuwait", "Lebanon", "Malaysia", "Mexico", "Morocco", "Nepal", "Netherlands", "New Zealand", "Nigeria", "Norway", "Pakistan", "Peru", "Philippines", "Poland", "Portugal", "Romania", "Russia", "Saudi Arabia", "Senegal", "Singapore", "South Africa", "Spain", "Sri Lanka", "Sweden", "Switzerland", "Syria", "Taiwan", "Tanzania", "Thailand", "Tunisia", "Turkey", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"];
 
 export default function OnboardingPage() {
@@ -106,10 +119,7 @@ export default function OnboardingPage() {
         {/* Header */}
         <div className="mb-8 text-center">
           <div className="mb-1 flex items-center justify-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-navy-950">
-              <span className="text-xs font-bold text-white">SL</span>
-            </div>
-            <span className="text-sm font-semibold text-slate-700">SourceLock</span>
+            <ApplyMapLogo className="h-9" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Let&rsquo;s set up your profile</h1>
           <p className="mt-1 text-sm text-slate-500">

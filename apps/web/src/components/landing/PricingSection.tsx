@@ -6,7 +6,7 @@ const plans = [
   {
     name: "Free",
     price: "$0",
-    description: "Try SourceLock with no commitment.",
+    description: "Try ApplyMap with no commitment.",
     features: [
       "Up to 10 achievements in vault",
       "1 free optimization report",

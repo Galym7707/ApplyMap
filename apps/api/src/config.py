@@ -3,12 +3,16 @@ from typing import List
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://sourcelock:sourcelock@localhost:5432/sourcelock_db"
+    DATABASE_URL: str = "postgresql://applymap:applymap@localhost:5432/applymap_db"
     SECRET_KEY: str = "dev-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+
+    # AI Chancellor
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
 
     # S3 / Storage
     S3_BUCKET_NAME: str = ""

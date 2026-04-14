@@ -51,7 +51,7 @@ apps/api/    FastAPI (Python 3.11 + SQLAlchemy + Alembic)
 Managed with pnpm workspaces + Turbo. No shared packages yet — each app is self-contained.
 
 ### Auth flow
-The backend issues a JWT stored as both an **httpOnly cookie** (`access_token`) and **`localStorage`** (`sourcelock_token`). The FastAPI `get_current_user` dependency checks the cookie first, then the `Authorization: Bearer` header. On the frontend, `useAuth` (`apps/web/src/hooks/useAuth.ts`) wraps TanStack Query and stores the token to localStorage on login; the axios interceptor in `apps/web/src/lib/api.ts` attaches it to every request. NextAuth is a dependency but is not the primary auth mechanism — custom email/password via FastAPI is.
+The backend issues a JWT stored as both an **httpOnly cookie** (`access_token`) and **`localStorage`** (`applymap_token`, with legacy fallback for `sourcelock_token`). The FastAPI `get_current_user` dependency checks the cookie first, then the `Authorization: Bearer` header. On the frontend, `useAuth` (`apps/web/src/hooks/useAuth.ts`) wraps TanStack Query and stores the token to localStorage on login; the axios interceptor in `apps/web/src/lib/api.ts` attaches it to every request. NextAuth is a dependency but is not the primary auth mechanism — custom email/password via FastAPI is.
 
 ### API response shape
 All API endpoints return `{ "data": ..., "message": "..." }`. Frontend callers access `res.data.data` to get the payload. All API functions are centralized in `apps/web/src/lib/api.ts`.

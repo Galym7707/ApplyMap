@@ -4,8 +4,8 @@ import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: {
-    default: "SourceLock — Source-Backed Common App Optimization",
-    template: "%s | SourceLock",
+    default: "ApplyMap - Source-Backed Common App Optimization",
+    template: "%s | ApplyMap",
   },
   description:
     "Choose, rank, and rewrite your strongest honors and activities for a specific university — with source-backed guidance, not fake admission predictions.",

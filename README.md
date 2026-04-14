@@ -1,8 +1,8 @@
-# SourceLock
+# ApplyMap
 
 Source-backed Common App optimization tool for international applicants.
 
-SourceLock helps students choose, rank, and rewrite their strongest honors and activities for a specific university — with source-backed guidance, not fake admission predictions.
+ApplyMap helps students choose, rank, and rewrite their strongest honors and activities for a specific university — with source-backed guidance, not fake admission predictions.
 
 ## Tech Stack
 
@@ -68,7 +68,7 @@ The app will be available at:
 ## Project Structure
 
 ```
-sourcelock/
+applymap/
 ├── apps/
 │   ├── web/          # Next.js frontend
 │   └── api/          # FastAPI backend

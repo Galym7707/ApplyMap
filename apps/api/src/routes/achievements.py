@@ -7,6 +7,7 @@ from ..database import get_db
 from ..schemas.achievement import AchievementCreate, AchievementUpdate, AchievementOut, EvidenceFileOut
 from ..models.achievement import Achievement, AchievementEvidenceFile, AchievementType
 from ..routes.auth import get_current_user
+from ..services.chancellor_analysis import estimate_chancellor_scores
 
 router = APIRouter(prefix="/api/achievements", tags=["achievements"])
 
@@ -33,9 +34,11 @@ def create_achievement(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    achievement_data = payload.model_dump()
+    achievement_data.update(estimate_chancellor_scores(payload, current_user))
     achievement = Achievement(
         user_id=current_user.id,
-        **payload.model_dump(),
+        **achievement_data,
     )
     db.add(achievement)
     db.commit()
@@ -79,6 +82,9 @@ def update_achievement(
         raise HTTPException(status_code=404, detail="Achievement not found")
 
     for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(achievement, field, value)
+
+    for field, value in estimate_chancellor_scores(achievement, current_user).items():
         setattr(achievement, field, value)
 
     db.commit()
