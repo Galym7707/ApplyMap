@@ -45,8 +45,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       if (typeof window !== "undefined") {
-        const isAuthPage =
-          window.location.pathname === "/sign-in" || window.location.pathname === "/sign-up";
+        const isAuthPage = ["/sign-in", "/sign-up"].includes(window.location.pathname);
         clearStoredAuthToken();
         if (!isAuthPage) {
           window.location.href = "/sign-in";
@@ -81,6 +80,14 @@ export const achievementsApi = {
   create: (data: Record<string, unknown>) => api.post("/api/achievements", data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/api/achievements/${id}`, data),
   delete: (id: string) => api.delete(`/api/achievements/${id}`),
+  importAll: (file: File, wordLimit: number) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("word_limit", String(wordLimit));
+    return api.post("/api/achievements/import-all", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
   upload: (id: string, file: File) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -92,10 +99,29 @@ export const achievementsApi = {
 
 // Universities
 export const universitiesApi = {
-  list: (params?: { search?: string; country?: string }) =>
+  list: (params?: {
+    search?: string;
+    country?: string;
+    region?: string;
+    application_system?: string;
+    teaching_language?: string;
+    major?: string;
+    school_years?: string | number;
+    full_ride_only?: boolean;
+    common_app_only?: boolean;
+    aid_type?: string;
+    sort_by?: string;
+    sort_dir?: string;
+  }) =>
     api.get("/api/universities", { params }),
   get: (id: string) => api.get(`/api/universities/${id}`),
   getSources: (id: string) => api.get(`/api/universities/${id}/sources`),
+  recommendCommonApp: (data: {
+    top_honor_ids: string[];
+    top_activity_ids: string[];
+    preferences: Record<string, unknown>;
+    save_preferences?: boolean;
+  }) => api.post("/api/universities/recommendations/common-app", data),
 };
 
 // Targets

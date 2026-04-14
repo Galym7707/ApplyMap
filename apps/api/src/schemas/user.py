@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional
+from typing import Optional, Any
 from datetime import datetime
 from uuid import UUID
 from ..models.user import UserRole
@@ -50,6 +50,7 @@ class ProfileCreate(BaseModel):
     toefl_score: Optional[int] = None
     budget_range: Optional[str] = None
     aid_needed: Optional[bool] = None
+    application_preferences_json: Optional[dict[str, Any]] = None
 
 
 class ProfileUpdate(ProfileCreate):
@@ -68,6 +69,7 @@ class ProfileOut(BaseModel):
     toefl_score: Optional[int] = None
     budget_range: Optional[str] = None
     aid_needed: Optional[bool] = None
+    application_preferences_json: Optional[dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
 

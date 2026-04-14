@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -53,22 +55,20 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-/* Fonts — Montserrat (UI) + Cinzel (display headings) */
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap');
-
-/* Display font — Cinzel classical serif, landing/headings only */
+/* Fonts: Montserrat (UI) + Cinzel (display headings) */
 .font-display {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-/* Score sliders ─────────────────────────────────────────────── */
+/* Score sliders */
 .score-slider {
   -webkit-appearance: none;
   appearance: none;
@@ -79,6 +79,7 @@
   cursor: pointer;
   width: 100%;
 }
+
 .score-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -90,9 +91,11 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   transition: transform 0.1s ease;
 }
+
 .score-slider::-webkit-slider-thumb:hover {
   transform: scale(1.15);
 }
+
 .score-slider::-moz-range-thumb {
   width: 16px;
   height: 16px;

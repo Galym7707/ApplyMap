@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { achievementsApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { AllAchievementsPanel } from "@/components/vault/AllAchievementsPanel";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -21,7 +22,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { Achievement } from "@/types";
+import type { Achievement, AchievementImportResult } from "@/types";
+
+const ACTIVITY_ORDER_STORAGE_KEY = "sourcelock_activity_order";
+const IMPORT_ANALYSIS_STORAGE_KEY = "applymap_all_import_analysis";
 
 // ─── Form schema ────────────────────────────────────────────────────────────
 
@@ -40,23 +44,19 @@ const achievementSchema = z.object({
   leadership_level: z.enum(["none", "member", "lead", "founder", "captain", ""]).optional(),
 });
 type FormData = z.infer<typeof achievementSchema>;
-const ACTIVITY_ORDER_KEY = "applymap_activity_order";
-const LEGACY_ACTIVITY_ORDER_KEY = "sourcelock_activity_order";
 
-type ScoreFieldKey =
-  | "major_relevance_score"
-  | "selectivity_score"
-  | "continuity_score"
-  | "distinctiveness_score";
+// ─── Status helpers ──────────────────────────────────────────────────────────
 
-const SCORE_FIELDS: { key: ScoreFieldKey; label: string }[] = [
+const SCORE_FIELDS: { key: keyof Achievement; label: string }[] = [
   { key: "major_relevance_score", label: "Major relevance" },
   { key: "selectivity_score", label: "Selectivity" },
   { key: "continuity_score", label: "Continuity" },
   { key: "distinctiveness_score", label: "Distinctiveness" },
 ];
 
-// ─── Status helpers ──────────────────────────────────────────────────────────
+function hasChancellorScores(achievement: Achievement) {
+  return SCORE_FIELDS.every((field) => typeof achievement[field.key] === "number");
+}
 
 function getStatus(achievement: Achievement) {
   const desc = achievement.description_raw ?? "";
@@ -70,15 +70,6 @@ function getStatus(achievement: Achievement) {
     return { label: "Analysis Pending", variant: "info" as const, icon: Sparkles };
   }
   return { label: "Strong", variant: "success" as const, icon: CheckCircle };
-}
-
-function hasChancellorScores(achievement: Achievement) {
-  return SCORE_FIELDS.every((field) => typeof achievement[field.key] === "number");
-}
-
-function formatScore(value?: number | null) {
-  if (typeof value !== "number") return "Pending";
-  return value.toFixed(1).replace(/\.0$/, "");
 }
 
 // ─── Score bar ───────────────────────────────────────────────────────────────
@@ -99,7 +90,7 @@ function ScoreBar({ label, value }: { label: string; value?: number | null }) {
       <div className="mb-1 flex items-center justify-between">
         <span className="text-[10px] leading-none text-slate-400">{label}</span>
         <span className="text-[10px] font-medium tabular-nums text-slate-500">
-          {formatScore(value)}
+          {value != null ? value.toFixed(1).replace(/\.0$/, "") : "Pending"}
         </span>
       </div>
       <div className="h-1 w-full rounded-full bg-slate-100">
@@ -166,15 +157,17 @@ function AchievementModal({
   onClose,
   defaultType,
   editing,
+  onSaved,
 }: {
   open: boolean;
   onClose: () => void;
   defaultType: "activity" | "honor";
   editing?: Achievement;
+  onSaved: () => void;
 }) {
   const queryClient = useQueryClient();
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(achievementSchema),
     defaultValues: editing
       ? {
@@ -187,10 +180,25 @@ function AchievementModal({
       : { type: defaultType, impact_scope: "", leadership_level: "" },
   });
 
+  useEffect(() => {
+    reset(
+      editing
+        ? {
+            ...editing,
+            hours_per_week: editing.hours_per_week?.toString() ?? "",
+            weeks_per_year: editing.weeks_per_year?.toString() ?? "",
+            impact_scope: editing.impact_scope ?? "",
+            leadership_level: editing.leadership_level ?? "",
+          }
+        : { type: defaultType, impact_scope: "", leadership_level: "" }
+    );
+  }, [defaultType, editing, reset]);
+
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => achievementsApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["achievements"] });
+      onSaved();
       toast.success("Achievement added");
       onClose();
     },
@@ -201,6 +209,7 @@ function AchievementModal({
       achievementsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["achievements"] });
+      onSaved();
       toast.success("Achievement updated");
       onClose();
     },
@@ -210,7 +219,7 @@ function AchievementModal({
     const data: Record<string, unknown> = {
       ...raw,
       hours_per_week: raw.hours_per_week ? parseFloat(raw.hours_per_week) : undefined,
-      weeks_per_year: raw.weeks_per_year ? parseInt(raw.weeks_per_year) : undefined,
+      weeks_per_year: raw.weeks_per_year ? parseInt(raw.weeks_per_year, 10) : undefined,
       impact_scope: raw.impact_scope || undefined,
       leadership_level: raw.leadership_level || undefined,
     };
@@ -224,7 +233,7 @@ function AchievementModal({
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={() => onClose()}>
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit achievement" : "Add achievement"}</DialogTitle>
@@ -307,8 +316,8 @@ function AchievementModal({
               <div>
                 <p className="font-medium">Chancellor analysis runs after saving.</p>
                 <p className="mt-1 text-xs text-blue-800">
-                  ApplyMap will estimate major relevance, selectivity, continuity, and
-                  distinctiveness from the achievement details.
+                  The app will estimate major relevance, selectivity, continuity, and
+                  distinctiveness from your achievement details.
                 </p>
               </div>
             </div>
@@ -369,12 +378,6 @@ function AchievementCard({
       ? "border-l-blue-400"
       : "border-l-red-400";
 
-  const hasAnyScore =
-    achievement.major_relevance_score != null ||
-    achievement.selectivity_score != null ||
-    achievement.continuity_score != null ||
-    achievement.distinctiveness_score != null;
-
   return (
     <div
       draggable={!!onDragStart}
@@ -427,21 +430,21 @@ function AchievementCard({
             {achievement.category && <span>· {achievement.category}</span>}
           </div>
 
-          {/* Score bars */}
-          {hasAnyScore && (
-            <div className="mt-3 border-t border-slate-100 pt-3">
-              <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-700">
-                <Sparkles className="h-3.5 w-3.5 text-blue-600" />
-                Chancellor analysis
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                <ScoreBar label="Relevance" value={achievement.major_relevance_score} />
-                <ScoreBar label="Selectivity" value={achievement.selectivity_score} />
-                <ScoreBar label="Continuity" value={achievement.continuity_score} />
-                <ScoreBar label="Distinctive" value={achievement.distinctiveness_score} />
-              </div>
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <div className="mb-3 flex items-center gap-1.5 text-xs font-medium text-slate-700">
+              <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+              Chancellor analysis
             </div>
-          )}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              {SCORE_FIELDS.map((field) => (
+                <ScoreBar
+                  key={field.key}
+                  label={field.label}
+                  value={achievement[field.key] as number | null | undefined}
+                />
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Actions */}
@@ -467,15 +470,17 @@ function AchievementCard({
 
 export default function VaultPage() {
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Achievement | undefined>();
   const [defaultType, setDefaultType] = useState<"activity" | "honor">("activity");
+  const [wordLimit, setWordLimit] = useState("22");
+  const [allImportResult, setAllImportResult] = useState<AchievementImportResult | null>(null);
 
   // Drag state
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
-  // Activity order (persisted to localStorage)
   const [activityOrder, setActivityOrder] = useState<string[]>([]);
 
   const { data, isLoading } = useQuery({
@@ -483,24 +488,72 @@ export default function VaultPage() {
     queryFn: () => achievementsApi.list(),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => achievementsApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["achievements"] });
-      toast.success("Achievement deleted");
-    },
-  });
-
   const achievements: Achievement[] = data?.data?.data ?? [];
   const activities = achievements.filter((a) => a.type === "activity");
   const honors = achievements.filter((a) => a.type === "honor");
 
+  const clearImportAnalysis = () => {
+    setAllImportResult(null);
+    try {
+      localStorage.removeItem(IMPORT_ANALYSIS_STORAGE_KEY);
+    } catch {}
+  };
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => achievementsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["achievements"] });
+      clearImportAnalysis();
+      toast.success("Achievement deleted");
+    },
+  });
+
+  const importMutation = useMutation({
+    mutationFn: ({ file, limit }: { file: File; limit: number }) => achievementsApi.importAll(file, limit),
+    onSuccess: (response) => {
+      const result = response.data.data as AchievementImportResult;
+      setAllImportResult(result);
+
+      try {
+        localStorage.setItem(IMPORT_ANALYSIS_STORAGE_KEY, JSON.stringify(result));
+      } catch {}
+
+      const reorderedActivityIds = [
+        ...result.top_activities.map((item) => item.achievement_id),
+        ...result.imported_achievements
+          .filter((achievement) => achievement.type === "activity")
+          .map((achievement) => achievement.id),
+        ...activities.map((achievement) => achievement.id),
+      ];
+      saveOrder(Array.from(new Set(reorderedActivityIds)));
+
+      queryClient.invalidateQueries({ queryKey: ["achievements"] });
+      toast.success(`Imported ${result.imported_count} achievements and built a shortlist`);
+    },
+    onError: (error: unknown) => {
+      const detail =
+        typeof error === "object" &&
+        error &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
+          ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : "Import failed. Try a text-based file and keep the word limit between 5 and 40.";
+      toast.error(detail);
+    },
+  });
+
   // Load order from localStorage
   useEffect(() => {
     try {
-      const stored =
-        localStorage.getItem(ACTIVITY_ORDER_KEY) ?? localStorage.getItem(LEGACY_ACTIVITY_ORDER_KEY);
+      const stored = localStorage.getItem(ACTIVITY_ORDER_STORAGE_KEY);
       if (stored) setActivityOrder(JSON.parse(stored));
+    } catch {}
+
+    try {
+      const storedAnalysis = localStorage.getItem(IMPORT_ANALYSIS_STORAGE_KEY);
+      if (storedAnalysis) {
+        setAllImportResult(JSON.parse(storedAnalysis) as AchievementImportResult);
+      }
     } catch {}
   }, []);
 
@@ -530,8 +583,7 @@ export default function VaultPage() {
   const saveOrder = (newOrder: string[]) => {
     setActivityOrder(newOrder);
     try {
-      localStorage.setItem(ACTIVITY_ORDER_KEY, JSON.stringify(newOrder));
-      localStorage.removeItem(LEGACY_ACTIVITY_ORDER_KEY);
+      localStorage.setItem(ACTIVITY_ORDER_STORAGE_KEY, JSON.stringify(newOrder));
     } catch {}
   };
 
@@ -551,6 +603,7 @@ export default function VaultPage() {
       newOrder.splice(from, 1);
       newOrder.splice(to, 0, draggingId);
       saveOrder(newOrder);
+      clearImportAnalysis();
     }
     handleDragEnd();
   };
@@ -566,8 +619,26 @@ export default function VaultPage() {
     setModalOpen(true);
   };
 
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    const parsedLimit = Number(wordLimit);
+    if (!Number.isFinite(parsedLimit) || parsedLimit < 5 || parsedLimit > 40) {
+      toast.error("Set a word limit between 5 and 40.");
+      return;
+    }
+
+    importMutation.mutate({ file, limit: parsedLimit });
+  };
+
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="max-w-6xl p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Achievement Vault</h1>
@@ -577,10 +648,23 @@ export default function VaultPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="activities">
+      <Tabs defaultValue="all">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json"
+          className="hidden"
+          onChange={handleImportFile}
+        />
+
         <div className="mb-4 flex items-center justify-between">
           <TabsList>
-            {/* Tab with styled counter badge */}
+            <TabsTrigger value="all" className="gap-2">
+              All
+              <span className="rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-semibold text-navy-800">
+                {achievements.length}
+              </span>
+            </TabsTrigger>
             <TabsTrigger value="activities" className="gap-2">
               Activities
               <span className="rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-semibold text-navy-800">
@@ -613,6 +697,20 @@ export default function VaultPage() {
             </Button>
           </div>
         </div>
+
+        <TabsContent value="all">
+          <AllAchievementsPanel
+            result={allImportResult}
+            wordLimit={wordLimit}
+            onWordLimitChange={setWordLimit}
+            onUploadClick={handleImportClick}
+            onClear={clearImportAnalysis}
+            isImporting={importMutation.isPending}
+            achievementCount={achievements.length}
+            activityCount={activities.length}
+            honorCount={honors.length}
+          />
+        </TabsContent>
 
         {/* Activities tab */}
         <TabsContent value="activities">
@@ -701,6 +799,7 @@ export default function VaultPage() {
         onClose={() => setModalOpen(false)}
         defaultType={defaultType}
         editing={editing}
+        onSaved={clearImportAnalysis}
       />
     </div>
   );

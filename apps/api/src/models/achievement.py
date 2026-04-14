@@ -52,7 +52,7 @@ class Achievement(Base):
     impact_scope = Column(Enum(ImpactScope), nullable=True)
     leadership_level = Column(Enum(LeadershipLevel), nullable=True)
 
-    # Computed/entered scores (0-10)
+    # Computed Chancellor scores (0-10)
     major_relevance_score = Column(Float, nullable=True)
     continuity_score = Column(Float, nullable=True)
     selectivity_score = Column(Float, nullable=True)

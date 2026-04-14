@@ -71,3 +71,24 @@ class AchievementOut(BaseModel):
     evidence_files: List[EvidenceFileOut] = []
 
     model_config = {"from_attributes": True}
+
+
+class AchievementImportSelectionItem(BaseModel):
+    achievement_id: UUID
+    type: AchievementType
+    rank: int
+    title: str
+    common_app_text: str
+    word_count: int
+    character_count: int
+    selection_reason: Optional[str] = None
+
+
+class AchievementImportOut(BaseModel):
+    file_name: str
+    word_limit: int
+    imported_count: int
+    strongest_angle: str
+    imported_achievements: List[AchievementOut]
+    top_activities: List[AchievementImportSelectionItem]
+    top_honors: List[AchievementImportSelectionItem]

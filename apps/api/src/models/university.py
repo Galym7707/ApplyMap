@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Enum, Text
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Enum, Text, Integer, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import enum
@@ -35,8 +35,25 @@ class University(Base):
     name = Column(String(255), nullable=False)
     country = Column(String(100), nullable=False)
     application_system = Column(String(100), nullable=True)  # CommonApp, Coalition, etc.
+    application_source_url = Column(String(1000), nullable=True)
     short_description = Column(Text, nullable=True)
     weight_preset = Column(Enum(WeightPreset), nullable=False, default=WeightPreset.balanced_holistic)
+    region = Column(String(100), nullable=True)
+    city = Column(String(255), nullable=True)
+    is_common_app = Column(Boolean, default=False, nullable=False)
+    teaching_languages = Column(JSON, nullable=True)
+    major_strengths = Column(JSON, nullable=True)
+    education_years_required = Column(Integer, nullable=True)
+    school_years_note = Column(Text, nullable=True)
+    aid_type = Column(String(100), nullable=True)
+    aid_strength = Column(Integer, nullable=True)
+    selectivity_score = Column(Integer, nullable=True)
+    full_ride_possible = Column(Boolean, default=False, nullable=False)
+    full_tuition_possible = Column(Boolean, default=False, nullable=False)
+    aid_notes = Column(Text, nullable=True)
+    funding_source_url = Column(String(1000), nullable=True)
+    funding_source_title = Column(String(500), nullable=True)
+    eligibility_notes = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
