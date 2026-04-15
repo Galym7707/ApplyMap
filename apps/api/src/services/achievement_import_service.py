@@ -12,54 +12,54 @@ MAX_IMPORT_BYTES = 200_000
 MAX_IMPORT_CHARS = 16_000
 DEFAULT_WORD_LIMIT = 22
 MAX_IMPORTED_ITEMS = 30
+MAX_TOP_ACTIVITIES = 10
+MAX_TOP_HONORS = 5
+COMMON_APP_ACTIVITY_POSITION_LIMIT = 50
+COMMON_APP_ACTIVITY_ORGANIZATION_LIMIT = 100
+COMMON_APP_ACTIVITY_DESCRIPTION_LIMIT = 150
+COMMON_APP_HONOR_DESCRIPTION_LIMIT = 100
 
 IMPORT_SCHEMA = {
     "type": "object",
     "properties": {
-        "strongest_angle": {
-            "type": "string",
-            "description": "One concise sentence explaining the strongest overall Common App positioning angle.",
-        },
+        "strongest_angle": {"type": "string"},
+        "needs_student_clarification": {"type": "boolean"},
+        "clarifying_questions": {"type": "array", "items": {"type": "string"}},
+        "additional_information_recommended": {"type": "boolean"},
+        "additional_information_reason": {"type": "string"},
+        "additional_information_draft": {"type": "string"},
+        "formatting_notes": {"type": "array", "items": {"type": "string"}},
         "items": {
             "type": "array",
-            "maxItems": MAX_IMPORTED_ITEMS,
             "items": {
                 "type": "object",
                 "properties": {
-                    "source_index": {"type": "integer", "minimum": 1},
+                    "source_index": {"type": "integer"},
                     "type": {"type": "string", "enum": ["activity", "honor"]},
                     "title": {"type": "string"},
                     "organization_name": {"type": ["string", "null"]},
                     "role_title": {"type": ["string", "null"]},
                     "description_raw": {"type": ["string", "null"]},
                     "category": {"type": ["string", "null"]},
-                    "hours_per_week": {"type": ["number", "null"], "minimum": 0, "maximum": 168},
-                    "weeks_per_year": {"type": ["integer", "null"], "minimum": 0, "maximum": 52},
-                    "impact_scope": {
-                        "type": ["string", "null"],
-                        "enum": [
-                            "school",
-                            "local",
-                            "regional",
-                            "national",
-                            "international",
-                            "family",
-                            "personal",
-                            None,
-                        ],
-                    },
-                    "leadership_level": {
-                        "type": ["string", "null"],
-                        "enum": ["none", "member", "lead", "founder", "captain", None],
-                    },
+                    "hours_per_week": {"type": ["number", "null"]},
+                    "weeks_per_year": {"type": ["integer", "null"]},
+                    "impact_scope": {"type": ["string", "null"]},
+                    "leadership_level": {"type": ["string", "null"]},
                     "truth_risk_flag": {"type": "boolean"},
-                    "major_relevance_score": {"type": "number", "minimum": 0, "maximum": 10},
-                    "selectivity_score": {"type": "number", "minimum": 0, "maximum": 10},
-                    "continuity_score": {"type": "number", "minimum": 0, "maximum": 10},
-                    "distinctiveness_score": {"type": "number", "minimum": 0, "maximum": 10},
+                    "major_relevance_score": {"type": "number"},
+                    "selectivity_score": {"type": "number"},
+                    "continuity_score": {"type": "number"},
+                    "distinctiveness_score": {"type": "number"},
                     "selection_reason": {"type": "string"},
                     "common_app_text": {"type": "string"},
-                    "recommended_rank": {"type": ["integer", "null"], "minimum": 1, "maximum": 10},
+                    "common_app_position": {"type": ["string", "null"]},
+                    "common_app_organization": {"type": ["string", "null"]},
+                    "common_app_activity_description": {"type": ["string", "null"]},
+                    "common_app_honor_description": {"type": ["string", "null"]},
+                    "verification_queries": {"type": "array", "items": {"type": "string"}},
+                    "verification_notes": {"type": "array", "items": {"type": "string"}},
+                    "missing_or_unclear_facts": {"type": "array", "items": {"type": "string"}},
+                    "recommended_rank": {"type": ["integer", "null"]},
                 },
                 "required": [
                     "source_index",
@@ -72,14 +72,28 @@ IMPORT_SCHEMA = {
                     "distinctiveness_score",
                     "selection_reason",
                     "common_app_text",
+                    "common_app_position",
+                    "common_app_organization",
+                    "common_app_activity_description",
+                    "common_app_honor_description",
+                    "verification_queries",
+                    "verification_notes",
+                    "missing_or_unclear_facts",
                     "recommended_rank",
                 ],
-                "additionalProperties": False,
             },
         },
     },
-    "required": ["strongest_angle", "items"],
-    "additionalProperties": False,
+    "required": [
+        "strongest_angle",
+        "needs_student_clarification",
+        "clarifying_questions",
+        "additional_information_recommended",
+        "additional_information_reason",
+        "additional_information_draft",
+        "formatting_notes",
+        "items",
+    ],
 }
 
 HONOR_KEYWORDS = (
@@ -137,13 +151,55 @@ def _truncate_characters(value: str, limit: int) -> str:
     return truncated.rstrip(",.;: ")
 
 
+def _clean_string_list(value: Any, *, max_items: int = 6, max_chars: int = 260) -> list[str]:
+    if not isinstance(value, list):
+        return []
+
+    strings: list[str] = []
+    for item in value:
+        text = _compact_whitespace(str(item or ""))
+        if text:
+            strings.append(_truncate_characters(text, max_chars))
+        if len(strings) >= max_items:
+            break
+    return strings
+
+
 def _enforce_common_app_limit(value: str, word_limit: int, achievement_type: str) -> str:
     words = _compact_whitespace(value).split()
     if word_limit > 0 and len(words) > word_limit:
         value = " ".join(words[:word_limit])
     if achievement_type == AchievementType.activity.value:
-        value = _truncate_characters(value, 150)
+        value = _truncate_characters(value, COMMON_APP_ACTIVITY_DESCRIPTION_LIMIT)
+    if achievement_type == AchievementType.honor.value:
+        value = _truncate_characters(value, COMMON_APP_HONOR_DESCRIPTION_LIMIT)
     return _compact_whitespace(value)
+
+
+def _activity_position(item: dict[str, Any]) -> str:
+    value = _compact_whitespace(str(item.get("common_app_position") or item.get("role_title") or item.get("title") or ""))
+    return _truncate_characters(value, COMMON_APP_ACTIVITY_POSITION_LIMIT)
+
+
+def _activity_organization(item: dict[str, Any]) -> str:
+    value = _compact_whitespace(str(item.get("common_app_organization") or item.get("organization_name") or ""))
+    return _truncate_characters(value, COMMON_APP_ACTIVITY_ORGANIZATION_LIMIT)
+
+
+def _activity_description(item: dict[str, Any], word_limit: int) -> str:
+    value = _compact_whitespace(
+        str(item.get("common_app_activity_description") or item.get("common_app_text") or item.get("description_raw") or "")
+    )
+    if not value:
+        value = _fallback_common_app_text(item, word_limit)
+    return _enforce_common_app_limit(value, word_limit, AchievementType.activity.value)
+
+
+def _honor_description(item: dict[str, Any], word_limit: int) -> str:
+    value = _compact_whitespace(
+        str(item.get("common_app_honor_description") or item.get("common_app_text") or item.get("title") or "")
+    )
+    return _enforce_common_app_limit(value, word_limit, AchievementType.honor.value)
 
 
 def _coerce_enum(enum_cls: Any, value: Any) -> Any:
@@ -243,6 +299,13 @@ def _fallback_parse(raw_text: str, user: Optional[Any], word_limit: int) -> dict
             **base_item,
             **scores,
             "common_app_text": "",
+            "common_app_position": None,
+            "common_app_organization": None,
+            "common_app_activity_description": None,
+            "common_app_honor_description": None,
+            "verification_queries": [],
+            "verification_notes": [],
+            "missing_or_unclear_facts": ["AI extraction was unavailable; verify the wording against the original evidence."],
             "recommended_rank": None,
         }
         item["common_app_text"] = _fallback_common_app_text(item, word_limit)
@@ -251,32 +314,64 @@ def _fallback_parse(raw_text: str, user: Optional[Any], word_limit: int) -> dict
     strongest_angle = (
         "Present the profile as a focused, evidence-backed student story with the strongest sustained work first."
     )
-    return {"strongest_angle": strongest_angle, "items": items}
+    return {
+        "strongest_angle": strongest_angle,
+        "needs_student_clarification": True,
+        "clarifying_questions": [
+            "Please confirm titles, dates, roles, and measurable outcomes before using the generated Common App wording."
+        ],
+        "additional_information_recommended": False,
+        "additional_information_reason": "",
+        "additional_information_draft": "",
+        "formatting_notes": ["Gemini extraction was unavailable, so ApplyMap used a conservative local fallback."],
+        "items": items,
+    }
 
 
 def _import_prompt(raw_text: str, user: Optional[Any], word_limit: int) -> str:
     payload = {
         "student_profile": _profile_context(user),
         "word_limit": word_limit,
+        "common_app_limits": {
+            "activities_max_items": MAX_TOP_ACTIVITIES,
+            "activity_position_leadership_description_chars": COMMON_APP_ACTIVITY_POSITION_LIMIT,
+            "activity_organization_name_chars": COMMON_APP_ACTIVITY_ORGANIZATION_LIMIT,
+            "activity_description_chars": COMMON_APP_ACTIVITY_DESCRIPTION_LIMIT,
+            "honors_max_items": MAX_TOP_HONORS,
+            "honor_title_description_chars": COMMON_APP_HONOR_DESCRIPTION_LIMIT,
+        },
         "raw_source_text": raw_text,
     }
     return (
         "You are ApplyMap Chancellor, helping an international student convert a messy mixed-achievement note file "
-        "into a clean Common App-ready shortlist.\n\n"
+        "into a clean, factual Common App-ready shortlist.\n\n"
         "Tasks:\n"
         "1. Extract distinct student achievements from the raw text. Merge obvious duplicates into one strongest version.\n"
         "2. Classify each item as either 'activity' or 'honor'.\n"
         "3. Fill structured fields conservatively. If a field is missing, use null instead of inventing facts.\n"
         "4. Score each item from 0 to 10 on major_relevance_score, selectivity_score, continuity_score, and distinctiveness_score.\n"
-        "5. Recommend the strongest top 10 activities and top 5 honors for a Common App-style application. Use recommended_rank "
+        "5. Recommend the strongest top 10 activities and top 5 academic honors for a Common App-style application. Use recommended_rank "
         "for selected items and null for the rest.\n"
-        f"6. Write one concise Common App-ready wording per item under {word_limit} words. For activities, keep it under 150 characters too.\n"
-        "7. strongest_angle must explain the single best overall application angle in one sentence.\n\n"
+        "6. For activities, fill separate Common App fields: common_app_position <= 50 characters, "
+        "common_app_organization <= 100 characters, and common_app_activity_description <= 150 characters. "
+        "Use the activity description for accomplishments and measurable impact, not role repetition.\n"
+        "7. For honors, fill common_app_honor_description as one title/description block <= 100 characters.\n"
+        "8. strongest_angle must explain the single best overall application angle in one sentence.\n"
+        "9. If there are inconsistencies in years, roles, award level, school grade, hours, or metrics, set "
+        "needs_student_clarification=true and write short clarifying_questions before the student should trust final wording.\n"
+        "10. Recommend Additional Information only when it is genuinely needed to clarify important context that cannot fit "
+        "in the activity/honor fields, unusual school/curriculum context, or multiple related awards. If recommended, write a "
+        "ready-to-paste concise additional_information_draft; otherwise leave it blank.\n\n"
         "Important constraints:\n"
         "- Do not invent achievements, outcomes, metrics, organizations, dates, leadership roles, or awards.\n"
         "- If the source sounds uncertain or inflated, set truth_risk_flag to true.\n"
         "- Prefer concrete, specific language over hype.\n"
         "- Preserve Kazakhstan/NIS/IB/A-Level context when present.\n"
+        "- In English output, MESK/МЭСК means NIS Grade 12 Certificate.\n"
+        "- Apply the College Essay Guy-style approach: active verbs, measurable impact, no filler, no repeated role wording, "
+        "selectivity where supported, and abbreviations only when they improve clarity.\n"
+        "- If the student omits participant counts, selection rates, dates, or exact award level, add those to "
+        "missing_or_unclear_facts and propose verification_queries. Do not fabricate counts.\n"
         "- The shortlist should reward spike, depth, selectivity, continuity, and distinctive impact.\n"
         "- A weak selected item is worse than leaving a slot empty. Only rank items that are truly shortlist-worthy.\n\n"
         f"Input JSON:\n{json.dumps(payload, ensure_ascii=False, default=str)}"
@@ -335,6 +430,92 @@ def _local_score(item: dict[str, Any]) -> float:
     )
 
 
+class SearchNotConfiguredError(RuntimeError):
+    pass
+
+
+def _google_search(query: str, *, num: int = 3) -> list[dict[str, str]]:
+    api_key = settings.GOOGLE_SEARCH_API_KEY.strip()
+    engine_id = settings.GOOGLE_SEARCH_ENGINE_ID.strip()
+    if not api_key or not engine_id:
+        raise SearchNotConfiguredError("Google Custom Search is not configured")
+
+    with httpx.Client(timeout=12.0) as client:
+        response = client.get(
+            "https://www.googleapis.com/customsearch/v1",
+            params={
+                "key": api_key,
+                "cx": engine_id,
+                "q": query,
+                "num": num,
+                "safe": "active",
+                "hl": "en",
+            },
+        )
+        response.raise_for_status()
+
+    results = response.json().get("items") or []
+    return [
+        {
+            "title": _compact_whitespace(str(item.get("title") or "")),
+            "url": str(item.get("link") or ""),
+            "snippet": _compact_whitespace(str(item.get("snippet") or "")),
+        }
+        for item in results
+        if item.get("link")
+    ]
+
+
+def _default_verification_query(item: dict[str, Any], user: Optional[Any]) -> str:
+    country = _compact_whitespace(str(getattr(user, "country", "") or ""))
+    parts = [
+        f'"{item.get("title")}"' if item.get("title") else "",
+        f'"{item.get("organization_name")}"' if item.get("organization_name") else "",
+        country if country else "",
+        "participants results award official",
+    ]
+    return _compact_whitespace(" ".join(part for part in parts if part))
+
+
+def _format_search_note(result: dict[str, str]) -> str:
+    title = _truncate_characters(result.get("title") or "Search result", 80)
+    snippet = _truncate_characters(result.get("snippet") or "No snippet available", 150)
+    url = result.get("url") or ""
+    return _truncate_characters(f"Source candidate: {title} - {snippet} ({url})", 300)
+
+
+def _attach_google_verification(items: list[dict[str, Any]], user: Optional[Any]) -> list[str]:
+    if not settings.GOOGLE_SEARCH_API_KEY.strip() or not settings.GOOGLE_SEARCH_ENGINE_ID.strip():
+        return [
+            "Google Search is not configured. Set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID to verify achievements online."
+        ]
+
+    notes: list[str] = []
+    for item in items:
+        query = (item.get("verification_queries") or [_default_verification_query(item, user)])[0]
+        if not query:
+            item.setdefault("missing_or_unclear_facts", []).append("No searchable title or organization was available.")
+            continue
+        try:
+            search_results = _google_search(query, num=3)
+        except (SearchNotConfiguredError, httpx.HTTPError):
+            item.setdefault("missing_or_unclear_facts", []).append(
+                "Google verification failed for this item; ask the student for an official link or evidence."
+            )
+            continue
+
+        if not search_results:
+            item.setdefault("missing_or_unclear_facts", []).append(
+                "No Google result found for this item; ask the student for an official source or certificate."
+            )
+            continue
+
+        item.setdefault("verification_notes", []).extend(_format_search_note(result) for result in search_results[:3])
+        notes.append(f"Checked Google for: {query}")
+
+    return notes
+
+
 def _normalize_items(result: dict[str, Any], word_limit: int) -> dict[str, Any]:
     normalized_items: list[dict[str, Any]] = []
 
@@ -367,14 +548,45 @@ def _normalize_items(result: dict[str, Any], word_limit: int) -> dict[str, Any]:
                 word_limit,
                 item_type.value,
             ),
+            "common_app_position": _compact_whitespace(str(raw_item.get("common_app_position") or "")) or None,
+            "common_app_organization": _compact_whitespace(str(raw_item.get("common_app_organization") or "")) or None,
+            "common_app_activity_description": _compact_whitespace(
+                str(raw_item.get("common_app_activity_description") or "")
+            )
+            or None,
+            "common_app_honor_description": _compact_whitespace(str(raw_item.get("common_app_honor_description") or ""))
+            or None,
+            "verification_queries": _clean_string_list(raw_item.get("verification_queries"), max_items=3, max_chars=160),
+            "verification_notes": _clean_string_list(raw_item.get("verification_notes"), max_items=5, max_chars=300),
+            "missing_or_unclear_facts": _clean_string_list(
+                raw_item.get("missing_or_unclear_facts"), max_items=6, max_chars=180
+            ),
             "recommended_rank": raw_item.get("recommended_rank"),
         }
         if not normalized["common_app_text"]:
             normalized["common_app_text"] = _fallback_common_app_text(normalized, word_limit)
+        if item_type == AchievementType.activity:
+            normalized["common_app_position"] = _activity_position(normalized)
+            normalized["common_app_organization"] = _activity_organization(normalized) or None
+            normalized["common_app_activity_description"] = _activity_description(normalized, word_limit)
+            normalized["common_app_text"] = normalized["common_app_activity_description"]
+            normalized["common_app_honor_description"] = None
+        else:
+            normalized["common_app_honor_description"] = _honor_description(normalized, word_limit)
+            normalized["common_app_text"] = normalized["common_app_honor_description"]
+            normalized["common_app_position"] = None
+            normalized["common_app_organization"] = None
+            normalized["common_app_activity_description"] = None
         normalized_items.append(normalized)
 
     return {
         "strongest_angle": _compact_whitespace(str(result.get("strongest_angle") or "")),
+        "needs_student_clarification": bool(result.get("needs_student_clarification")),
+        "clarifying_questions": _clean_string_list(result.get("clarifying_questions"), max_items=8, max_chars=220),
+        "additional_information_recommended": bool(result.get("additional_information_recommended")),
+        "additional_information_reason": _compact_whitespace(str(result.get("additional_information_reason") or "")),
+        "additional_information_draft": _compact_whitespace(str(result.get("additional_information_draft") or "")),
+        "formatting_notes": _clean_string_list(result.get("formatting_notes"), max_items=8, max_chars=220),
         "items": normalized_items,
     }
 
@@ -405,12 +617,12 @@ def parse_achievement_import(raw_text: str, user: Optional[Any], word_limit: int
     )
 
     if not any(item.get("recommended_rank") for item in ranked_activities):
-        for rank, item in enumerate(sorted(activities, key=_local_score, reverse=True)[:10], start=1):
+        for rank, item in enumerate(sorted(activities, key=_local_score, reverse=True)[:MAX_TOP_ACTIVITIES], start=1):
             item["recommended_rank"] = rank
         ranked_activities = sorted(activities, key=lambda item: item.get("recommended_rank") or 99)
 
     if not any(item.get("recommended_rank") for item in ranked_honors):
-        for rank, item in enumerate(sorted(honors, key=_local_score, reverse=True)[:5], start=1):
+        for rank, item in enumerate(sorted(honors, key=_local_score, reverse=True)[:MAX_TOP_HONORS], start=1):
             item["recommended_rank"] = rank
         ranked_honors = sorted(honors, key=lambda item: item.get("recommended_rank") or 99)
 
@@ -418,9 +630,16 @@ def parse_achievement_import(raw_text: str, user: Optional[Any], word_limit: int
         "Lead with the most selective, sustained, and distinctive work, then support it with the strongest honors."
     )
     normalized["top_activities"] = [
-        item for item in ranked_activities if item.get("recommended_rank") and item["recommended_rank"] <= 10
-    ][:10]
+        item
+        for item in ranked_activities
+        if item.get("recommended_rank") and item["recommended_rank"] <= MAX_TOP_ACTIVITIES
+    ][:MAX_TOP_ACTIVITIES]
     normalized["top_honors"] = [
-        item for item in ranked_honors if item.get("recommended_rank") and item["recommended_rank"] <= 5
-    ][:5]
+        item for item in ranked_honors if item.get("recommended_rank") and item["recommended_rank"] <= MAX_TOP_HONORS
+    ][:MAX_TOP_HONORS]
+    verification_notes = _attach_google_verification(
+        [*normalized["top_activities"], *normalized["top_honors"]],
+        user,
+    )
+    normalized["formatting_notes"].extend(verification_notes)
     return normalized

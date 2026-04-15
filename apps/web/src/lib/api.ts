@@ -122,12 +122,14 @@ export const universitiesApi = {
     preferences: Record<string, unknown>;
     save_preferences?: boolean;
   }) => api.post("/api/universities/recommendations/common-app", data),
+  advisorPlan: (data: { university_name: string; intended_major?: string }) =>
+    api.post("/api/universities/advisor/plan", data),
 };
 
 // Targets
 export const targetsApi = {
   list: () => api.get("/api/targets"),
-  add: (data: { university_id: string; priority_order?: number }) =>
+  add: (data: { university_id: string; priority_order?: number; fit_category?: "dream" | "target" | "safe" }) =>
     api.post("/api/targets", data),
   remove: (id: string) => api.delete(`/api/targets/${id}`),
 };

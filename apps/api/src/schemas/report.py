@@ -10,6 +10,7 @@ from .university import UniversityListOut, PolicyEntryOut
 class TargetUniversityCreate(BaseModel):
     university_id: UUID
     priority_order: Optional[int] = None
+    fit_category: str = "target"
 
 
 class TargetUniversityOut(BaseModel):
@@ -17,6 +18,7 @@ class TargetUniversityOut(BaseModel):
     user_id: UUID
     university_id: UUID
     priority_order: Optional[int] = None
+    fit_category: str = "target"
     created_at: datetime
     university: UniversityListOut
 

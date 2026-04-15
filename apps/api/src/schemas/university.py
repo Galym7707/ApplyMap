@@ -164,6 +164,11 @@ class CommonAppRecommendationRequest(BaseModel):
     save_preferences: bool = True
 
 
+class UniversityAdvisorRequest(BaseModel):
+    university_name: str = Field(min_length=2, max_length=255)
+    intended_major: Optional[str] = None
+
+
 class CommonAppRecommendationOut(BaseModel):
     university_id: UUID
     slug: str

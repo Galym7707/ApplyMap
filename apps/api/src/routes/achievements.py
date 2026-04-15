@@ -217,7 +217,17 @@ async def import_all_achievements(
             "common_app_text": item["common_app_text"],
             "word_count": len(item["common_app_text"].split()),
             "character_count": len(item["common_app_text"]),
+            "common_app_position": item.get("common_app_position"),
+            "common_app_organization": item.get("common_app_organization"),
+            "common_app_activity_description": item.get("common_app_activity_description"),
+            "common_app_honor_description": item.get("common_app_honor_description"),
+            "position_character_count": len(item.get("common_app_position") or ""),
+            "organization_character_count": len(item.get("common_app_organization") or ""),
+            "activity_description_character_count": len(item.get("common_app_activity_description") or ""),
+            "honor_character_count": len(item.get("common_app_honor_description") or ""),
             "selection_reason": item.get("selection_reason") or None,
+            "verification_notes": item.get("verification_notes") or [],
+            "missing_or_unclear_facts": item.get("missing_or_unclear_facts") or [],
         }
         if achievement.type == AchievementType.activity and rank <= 10:
             activity_selection.append(selection_item)
@@ -233,6 +243,12 @@ async def import_all_achievements(
             word_limit=word_limit,
             imported_count=len(imported_achievements),
             strongest_angle=parsed["strongest_angle"],
+            needs_student_clarification=parsed.get("needs_student_clarification", False),
+            clarifying_questions=parsed.get("clarifying_questions", []),
+            additional_information_recommended=parsed.get("additional_information_recommended", False),
+            additional_information_reason=parsed.get("additional_information_reason") or None,
+            additional_information_draft=parsed.get("additional_information_draft") or None,
+            formatting_notes=parsed.get("formatting_notes", []),
             imported_achievements=[
                 AchievementOut.model_validate(achievement).model_dump()
                 for achievement in imported_achievements

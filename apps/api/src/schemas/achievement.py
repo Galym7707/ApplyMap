@@ -81,7 +81,17 @@ class AchievementImportSelectionItem(BaseModel):
     common_app_text: str
     word_count: int
     character_count: int
+    common_app_position: Optional[str] = None
+    common_app_organization: Optional[str] = None
+    common_app_activity_description: Optional[str] = None
+    common_app_honor_description: Optional[str] = None
+    position_character_count: Optional[int] = None
+    organization_character_count: Optional[int] = None
+    activity_description_character_count: Optional[int] = None
+    honor_character_count: Optional[int] = None
     selection_reason: Optional[str] = None
+    verification_notes: List[str] = []
+    missing_or_unclear_facts: List[str] = []
 
 
 class AchievementImportOut(BaseModel):
@@ -89,6 +99,12 @@ class AchievementImportOut(BaseModel):
     word_limit: int
     imported_count: int
     strongest_angle: str
+    needs_student_clarification: bool = False
+    clarifying_questions: List[str] = []
+    additional_information_recommended: bool = False
+    additional_information_reason: Optional[str] = None
+    additional_information_draft: Optional[str] = None
+    formatting_notes: List[str] = []
     imported_achievements: List[AchievementOut]
     top_activities: List[AchievementImportSelectionItem]
     top_honors: List[AchievementImportSelectionItem]

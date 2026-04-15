@@ -9,11 +9,17 @@ from ..schemas.university import (
     UniversityListOut,
     PolicyEntryOut,
     CommonAppRecommendationRequest,
+    UniversityAdvisorRequest,
 )
 from ..models.achievement import Achievement
 from ..models.university import University, UniversityPolicyEntry
 from ..routes.auth import get_current_user
 from ..services.university_filters import enrich_university, filter_universities
+from ..services.university_advisor import (
+    SearchNotConfiguredError,
+    generate_university_action_plan,
+    search_university_sources,
+)
 from ..services.university_recommender import recommend_common_app_universities
 
 router = APIRouter(prefix="/api/universities", tags=["universities"])
@@ -131,6 +137,47 @@ def recommend_common_app(
             "category_note": "Safe means relative safety within the funded Common App shortlist, not guaranteed admission or aid.",
         },
         "message": "Recommendations generated",
+    }
+
+
+@router.post("/advisor/plan", response_model=dict)
+def university_advisor_plan(
+    payload: UniversityAdvisorRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    profile = current_user.profile
+    intended_major = payload.intended_major or (profile.intended_major if profile else None)
+    try:
+        search_results = search_university_sources(payload.university_name, intended_major)
+    except SearchNotConfiguredError:
+        raise HTTPException(
+            status_code=503,
+            detail="Google Custom Search is not configured. Set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID.",
+        )
+    except Exception:
+        raise HTTPException(status_code=502, detail="Google Custom Search request failed")
+
+    achievements = (
+        db.query(Achievement)
+        .filter(Achievement.user_id == current_user.id)
+        .order_by(Achievement.created_at.desc())
+        .limit(25)
+        .all()
+    )
+    plan = generate_university_action_plan(
+        university_name=payload.university_name,
+        user=current_user,
+        achievements=achievements,
+        search_results=search_results,
+    )
+    return {
+        "data": {
+            "university_name": payload.university_name,
+            "sources": search_results,
+            "plan": plan,
+        },
+        "message": "Advisor plan generated",
     }
 
 

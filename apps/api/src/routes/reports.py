@@ -40,6 +40,7 @@ def add_target(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    fit_category = payload.fit_category if payload.fit_category in {"dream", "target", "safe"} else "target"
     # Check university exists
     university = db.query(University).filter(University.id == payload.university_id).first()
     if not university:
@@ -57,6 +58,7 @@ def add_target(
         user_id=current_user.id,
         university_id=payload.university_id,
         priority_order=payload.priority_order,
+        fit_category=fit_category,
     )
     db.add(target)
     db.commit()

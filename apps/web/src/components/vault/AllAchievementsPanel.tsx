@@ -9,6 +9,42 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AchievementImportResult, AchievementImportSelectionItem } from "@/types";
 
+const ACTIVITY_POSITION_LIMIT = 50;
+const ACTIVITY_ORGANIZATION_LIMIT = 100;
+const ACTIVITY_DESCRIPTION_LIMIT = 150;
+const HONOR_DESCRIPTION_LIMIT = 100;
+
+function CharacterBadge({ count = 0, limit }: { count?: number; limit: number }) {
+  const isOver = count > limit;
+  return (
+    <Badge variant={isOver ? "destructive" : "secondary"} className="shrink-0">
+      {count}/{limit} chars
+    </Badge>
+  );
+}
+
+function CommonAppField({
+  label,
+  value,
+  count,
+  limit,
+}: {
+  label: string;
+  value?: string;
+  count?: number;
+  limit: number;
+}) {
+  return (
+    <div className="rounded-lg bg-white px-3 py-2">
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+        <CharacterBadge count={count ?? value?.length ?? 0} limit={limit} />
+      </div>
+      <p className="text-sm leading-relaxed text-slate-800">{value || "Not enough information yet."}</p>
+    </div>
+  );
+}
+
 function SelectionColumn({
   title,
   subtitle,
@@ -48,14 +84,68 @@ function SelectionColumn({
                   <h4 className="truncate text-sm font-semibold text-slate-900">{item.title}</h4>
                 </div>
                 <Badge variant="info" className="shrink-0">
-                  {item.word_count} words
+                  {item.type === "activity" ? "Activity" : "Honor"}
                 </Badge>
               </div>
-              <p className="rounded-lg bg-white px-3 py-2 text-sm leading-relaxed text-slate-800">
-                {item.common_app_text}
-              </p>
+
+              {item.type === "activity" ? (
+                <div className="space-y-2">
+                  <CommonAppField
+                    label="Position / leadership"
+                    value={item.common_app_position}
+                    count={item.position_character_count}
+                    limit={ACTIVITY_POSITION_LIMIT}
+                  />
+                  <CommonAppField
+                    label="Organization"
+                    value={item.common_app_organization}
+                    count={item.organization_character_count}
+                    limit={ACTIVITY_ORGANIZATION_LIMIT}
+                  />
+                  <CommonAppField
+                    label="Activity description"
+                    value={item.common_app_activity_description || item.common_app_text}
+                    count={item.activity_description_character_count ?? item.character_count}
+                    limit={ACTIVITY_DESCRIPTION_LIMIT}
+                  />
+                </div>
+              ) : (
+                <CommonAppField
+                  label="Honor title / description"
+                  value={item.common_app_honor_description || item.common_app_text}
+                  count={item.honor_character_count ?? item.character_count}
+                  limit={HONOR_DESCRIPTION_LIMIT}
+                />
+              )}
+
               {item.selection_reason && (
                 <p className="mt-2 text-xs leading-relaxed text-slate-500">{item.selection_reason}</p>
+              )}
+
+              {(item.missing_or_unclear_facts ?? []).length > 0 && (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                    Ask before finalizing
+                  </p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4 text-xs leading-relaxed text-amber-900">
+                    {(item.missing_or_unclear_facts ?? []).map((fact) => (
+                      <li key={fact}>{fact}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(item.verification_notes ?? []).length > 0 && (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Google source notes
+                  </p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4 text-xs leading-relaxed text-slate-600">
+                    {(item.verification_notes ?? []).map((note) => (
+                      <li key={note}>{note}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
           ))}
@@ -100,8 +190,8 @@ export function AllAchievementsPanel({
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
                 The app extracts achievements from one messy note, classifies them into activities and
-                honors, picks the strongest top 10 and top 5, and writes concise shortlist wording under
-                your target word limit.
+                honors, picks the strongest top 10 and top 5, and writes Common App-ready fields under
+                strict character limits.
               </p>
             </div>
             <div className="hidden rounded-2xl bg-white p-3 shadow-sm lg:block">
@@ -140,7 +230,7 @@ export function AllAchievementsPanel({
                 className="mt-2"
               />
               <p className="mt-2 text-xs text-slate-500">
-                The AI keeps each shortlist line under this cap.
+                Backup cap only. Common App character limits are enforced separately.
               </p>
               <Button
                 className="mt-4 w-full gap-2 bg-navy-950 text-white hover:bg-navy-900"
@@ -198,7 +288,7 @@ export function AllAchievementsPanel({
                   {result.strongest_angle}
                 </p>
                 <p className="mt-2 text-sm text-emerald-800">
-                  Latest file: {result.file_name} · {result.word_limit} word limit
+                  Latest file: {result.file_name} - {result.word_limit} word limit
                 </p>
               </div>
               <Button variant="outline" onClick={onClear}>
@@ -206,6 +296,48 @@ export function AllAchievementsPanel({
               </Button>
             </div>
           </div>
+
+          {result.needs_student_clarification && (result.clarifying_questions ?? []).length > 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
+                Questions before final wording
+              </p>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-amber-950">
+                {(result.clarifying_questions ?? []).map((question) => (
+                  <li key={question}>{question}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {result.additional_information_recommended && result.additional_information_draft && (
+            <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">
+                Additional Information draft
+              </p>
+              {result.additional_information_reason && (
+                <p className="mt-2 text-sm leading-relaxed text-sky-900">
+                  {result.additional_information_reason}
+                </p>
+              )}
+              <p className="mt-3 rounded-lg bg-white px-4 py-3 text-sm leading-relaxed text-slate-800">
+                {result.additional_information_draft}
+              </p>
+            </div>
+          )}
+
+          {(result.formatting_notes ?? []).length > 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                Formatting and verification notes
+              </p>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-600">
+                {(result.formatting_notes ?? []).map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="grid gap-6 xl:grid-cols-2">
             <SelectionColumn

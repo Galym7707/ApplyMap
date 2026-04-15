@@ -1,34 +1,34 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Shield, BookOpen, Star, Lock } from "lucide-react";
+import { ArrowRight, BookOpen, Map, Shield, Star } from "lucide-react";
 
-const mockRecommendations = [
+const profileMoments = [
   {
     rank: 1,
     title: "National Science Olympiad",
-    meta: "Team Captain · 8h/wk · National scope",
-    status: "Keep",
+    meta: "Leadership, rigor, and national context",
+    status: "Clarify impact",
     color: "emerald",
   },
   {
     rank: 2,
-    title: "ML Research — Nazarbayev University",
-    meta: "Research Assistant · 12h/wk",
-    status: "Keep",
+    title: "ML Research at Nazarbayev University",
+    meta: "Academic direction and evidence",
+    status: "Build spike",
     color: "emerald",
   },
   {
     rank: 3,
     title: "Student Council President",
-    meta: "Description needs strengthening",
-    status: "Rewrite",
+    meta: "Leadership needs concrete outcomes",
+    status: "Sharpen",
     color: "amber",
   },
   {
     rank: null,
     title: "Casual Math Tutoring",
-    meta: "Low relevance for research profile",
-    status: "Remove",
+    meta: "Useful only if impact is specific",
+    status: "Review",
     color: "red",
   },
 ];
@@ -41,8 +41,7 @@ const statusStyles: Record<string, string> = {
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden px-6 pt-20 pb-16">
-      {/* Radial navy tint at top center */}
+    <section className="relative overflow-hidden px-6 pb-16 pt-20">
       <div
         className="pointer-events-none absolute inset-0"
         style={{
@@ -50,117 +49,107 @@ export function Hero() {
             "radial-gradient(ellipse 80% 45% at 50% 0%, rgba(20, 21, 84, 0.07) 0%, transparent 65%)",
         }}
       />
-      {/* Fade to page background at bottom */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#F9F8F6]/60" />
 
       <div className="relative mx-auto max-w-4xl text-center">
-        {/* Animated trust badge */}
         <div className="mb-7 flex justify-center">
           <div className="inline-flex animate-badge-glow items-center gap-2 rounded-full border border-navy-200 bg-navy-50 px-4 py-1.5 text-sm text-navy-800">
             <Shield className="h-3.5 w-3.5" />
-            Source-backed guidance for international applicants
+            Accessible admissions guidance for independent students
           </div>
         </div>
 
-        {/* Eyebrow */}
         <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-navy-700">
-          Common App Optimization
+          ApplyMap
         </p>
 
-        {/* Headline — short and punchy, 2 visual lines */}
         <h1 className="font-display mb-6 text-5xl font-bold leading-[1.1] text-slate-900 sm:text-6xl">
-          Your strongest activities,{" "}
-          <span className="italic text-navy-950">ranked for each university.</span>
+          Your hard work deserves{" "}
+          <span className="italic text-navy-950">to be seen.</span>
         </h1>
 
         <p className="mx-auto mb-10 max-w-2xl text-xl leading-relaxed text-slate-600">
-          Source-backed guidance from official admissions materials — not AI
-          guesswork, not generic advice. Built for international Common App
-          applicants.
+          Navigate college admissions with clarity and confidence. ApplyMap helps
+          you recognize your strengths, structure your achievements, and discover
+          universities that fit, without expensive private consultants.
         </p>
 
-        {/* CTAs — primary dominant, ghost link stacked below */}
         <div className="flex flex-col items-center gap-3">
           <Link href="/sign-up">
             <Button
               size="xl"
-              className="bg-navy-950 text-white hover:bg-navy-900 gap-2 active:scale-[0.97] transition-transform"
+              className="gap-2 bg-navy-950 text-white transition-transform hover:bg-navy-900 active:scale-[0.97]"
             >
-              Start free <ArrowRight className="h-4 w-4" />
+              Start Mapping Your Profile <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
           <Link
             href="#how-it-works"
-            className="text-sm text-slate-500 hover:text-navy-700 transition-colors underline underline-offset-2"
+            className="text-sm text-slate-500 underline underline-offset-2 transition-colors hover:text-navy-700"
           >
             See how it works
           </Link>
         </div>
 
-        {/* Product mockup */}
-        <div className="mt-16 mx-auto max-w-xl">
+        <div className="mx-auto mt-16 max-w-xl">
           <div
-            className="rotate-[0.5deg] rounded-2xl border border-slate-200 bg-white overflow-hidden ring-1 ring-slate-900/5"
+            className="rotate-[0.5deg] overflow-hidden rounded-2xl border border-slate-200 bg-white ring-1 ring-slate-900/5"
             style={{
               boxShadow:
                 "0 20px 60px -10px rgba(20, 21, 84, 0.15), 0 4px 16px -4px rgba(0,0,0,0.08)",
             }}
           >
-            {/* Report header bar */}
             <div className="flex items-center justify-between bg-navy-950 px-5 py-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-5 w-5 items-center justify-center rounded bg-navy-800">
-                  <Lock className="h-3 w-3 text-white" />
+                  <Map className="h-3 w-3 text-white" />
                 </div>
                 <span className="text-sm font-semibold text-white">
-                  MIT · Research-Heavy Profile
+                  ApplyMap - Guided Profile Map
                 </span>
               </div>
-              <span className="text-xs text-navy-300">v1 · Apr 2026</span>
+              <span className="text-xs text-navy-300">student-owned</span>
             </div>
 
-            {/* Report body */}
             <div className="p-5">
               <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                Recommended Activities
+                What ApplyMap helps you see
               </p>
 
               <div className="space-y-2">
-                {mockRecommendations.map((rec, i) => (
+                {profileMoments.map((item) => (
                   <div
-                    key={i}
+                    key={item.title}
                     className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2.5"
                   >
                     <span className="w-5 shrink-0 text-right text-xs font-bold text-slate-400">
-                      {rec.rank ? `#${rec.rank}` : "—"}
+                      {item.rank ? `#${item.rank}` : "--"}
                     </span>
-                    <div className="flex-1 min-w-0 text-left">
+                    <div className="min-w-0 flex-1 text-left">
                       <p className="truncate text-sm font-medium text-slate-900">
-                        {rec.title}
+                        {item.title}
                       </p>
-                      <p className="text-xs text-slate-400">{rec.meta}</p>
+                      <p className="text-xs text-slate-400">{item.meta}</p>
                     </div>
                     <span
-                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[rec.color]}`}
+                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[item.color]}`}
                     >
-                      {rec.status}
+                      {item.status}
                     </span>
                   </div>
                 ))}
               </div>
 
-              {/* Source footer */}
               <div className="mt-4 flex items-center gap-1.5 border-t border-slate-100 pt-3">
                 <BookOpen className="h-3.5 w-3.5 shrink-0 text-navy-500" />
                 <span className="text-xs text-slate-400">
-                  3 recommendations tied to official MIT admissions materials
+                  Structure real experiences before turning them into applications
                 </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Social proof */}
         <div className="mt-10 flex flex-wrap items-center justify-center gap-8 text-sm text-slate-500">
           <div className="flex items-center gap-1.5">
             <div className="flex">
@@ -168,11 +157,11 @@ export function Hero() {
                 <Star key={i} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
               ))}
             </div>
-            <span>Trusted by students from 40+ countries</span>
+            <span>Built for students navigating without private counselors</span>
           </div>
           <div className="flex items-center gap-1.5">
             <BookOpen className="h-3.5 w-3.5 text-navy-700" />
-            <span>Every recommendation tied to an official source</span>
+            <span>Guidance anchored to sources and student-owned facts</span>
           </div>
           <div className="flex items-center gap-1.5">
             <Shield className="h-3.5 w-3.5 text-emerald-600" />

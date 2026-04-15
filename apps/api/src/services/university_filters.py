@@ -92,6 +92,6 @@ def filter_universities(
     if aid_type:
         result = [item for item in result if item.get("aid_type") == aid_type]
 
-    sort_key = sort_by if sort_by in {"name", "country", "aid_strength", "selectivity_score", "education_years_required"} else "name"
+    sort_key = sort_by if sort_by in {"name", "country", "aid_type", "aid_strength", "selectivity_score", "education_years_required"} else "name"
     reverse = sort_dir == "desc"
     return sorted(result, key=lambda item: (item.get(sort_key) is None, item.get(sort_key)), reverse=reverse)

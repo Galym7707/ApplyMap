@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     # AI Chancellor
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.5-flash"
+    GOOGLE_SEARCH_API_KEY: str = ""
+    GOOGLE_SEARCH_ENGINE_ID: str = ""
 
     # S3 / Storage
     S3_BUCKET_NAME: str = ""

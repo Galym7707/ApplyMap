@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { profileApi, targetsApi, universitiesApi } from "@/lib/api";
@@ -23,7 +23,7 @@ const STEP_NOTES = [
   "Move into the dashboard and start the workflow.",
 ];
 
-const CURRICULA = ["NIS Programme (Kazakhstan/Cambridge)", "Kazakhstan National Curriculum", "UNT/ENT preparation track", "MESK / NIS Selection Exam", "IB (International Baccalaureate)", "A-Levels", "AP (Advanced Placement)", "French Baccalaureate", "German Abitur", "CBSE", "IGCSE", "National Curriculum", "Other"];
+const CURRICULA = ["NIS Grade 12 Certificate", "NIS Programme (Kazakhstan/Cambridge)", "Kazakhstan National Curriculum", "UNT/ENT preparation track", "IB (International Baccalaureate)", "A-Levels", "AP (Advanced Placement)", "French Baccalaureate", "German Abitur", "CBSE", "IGCSE", "National Curriculum", "Other"];
 const COUNTRIES = ["Afghanistan", "Albania", "Algeria", "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan", "Bangladesh", "Belgium", "Bolivia", "Brazil", "Cambodia", "Cameroon", "Canada", "Chile", "China", "Colombia", "Congo", "Costa Rica", "Croatia", "Cuba", "Czech Republic", "Denmark", "Ecuador", "Egypt", "Ethiopia", "Finland", "France", "Germany", "Ghana", "Greece", "Guatemala", "Honduras", "Hungary", "India", "Indonesia", "Iran", "Iraq", "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "South Korea", "Kuwait", "Lebanon", "Malaysia", "Mexico", "Morocco", "Nepal", "Netherlands", "New Zealand", "Nigeria", "Norway", "Pakistan", "Peru", "Philippines", "Poland", "Portugal", "Romania", "Russia", "Saudi Arabia", "Senegal", "Singapore", "South Africa", "Spain", "Sri Lanka", "Sweden", "Switzerland", "Syria", "Taiwan", "Tanzania", "Thailand", "Tunisia", "Turkey", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"];
 
 function csvToArray(value: string) {
@@ -36,10 +36,15 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
   const [search, setSearch] = useState("");
+  const [loadedProfile, setLoadedProfile] = useState(false);
 
   const { data: universitiesData, isLoading: isUniversitiesLoading } = useQuery({
     queryKey: ["universities"],
     queryFn: () => universitiesApi.list(),
+  });
+  const { data: profileData } = useQuery({
+    queryKey: ["profile"],
+    queryFn: () => profileApi.get(),
   });
   const universities: University[] = universitiesData?.data?.data ?? [];
 
@@ -69,9 +74,26 @@ export default function OnboardingPage() {
       curriculum: "",
       intended_major: "",
       sat_score: "",
+      sat_math: "",
+      sat_ebrw: "",
       act_score: "",
       ielts_score: "",
+      ielts_listening: "",
+      ielts_reading: "",
+      ielts_writing: "",
+      ielts_speaking: "",
       toefl_score: "",
+      toefl_reading: "",
+      toefl_listening: "",
+      toefl_speaking: "",
+      toefl_writing: "",
+      duolingo_score: "",
+      a_level_subjects: "",
+      a_level_predicted: "",
+      ap_subjects: "",
+      ib_predicted_score: "",
+      unt_score: "",
+      nis_grade12_certificate_gpa: "",
       preferred_countries: "United States, United Arab Emirates, Canada",
       preferred_regions: "USA, Abu Dhabi / UAE, Canada, Hong Kong, Korea, Japan, Europe",
       teaching_language: "English",
@@ -79,6 +101,45 @@ export default function OnboardingPage() {
       needs_full_ride: true,
     },
   });
+
+  useEffect(() => {
+    if (loadedProfile || !profileData?.data?.data) return;
+    const { user, profile } = profileData.data.data;
+    const saved = profile?.application_preferences_json ?? {};
+    form.reset({
+      country: user?.country ?? "",
+      graduation_year: profile?.graduation_year ? String(profile.graduation_year) : "",
+      curriculum: profile?.curriculum ?? "",
+      intended_major: profile?.intended_major ?? "",
+      sat_score: profile?.sat_score ? String(profile.sat_score) : "",
+      sat_math: profile?.sat_math ? String(profile.sat_math) : "",
+      sat_ebrw: profile?.sat_ebrw ? String(profile.sat_ebrw) : "",
+      act_score: profile?.act_score ? String(profile.act_score) : "",
+      ielts_score: profile?.ielts_score ?? "",
+      ielts_listening: profile?.ielts_listening ?? "",
+      ielts_reading: profile?.ielts_reading ?? "",
+      ielts_writing: profile?.ielts_writing ?? "",
+      ielts_speaking: profile?.ielts_speaking ?? "",
+      toefl_score: profile?.toefl_score ? String(profile.toefl_score) : "",
+      toefl_reading: profile?.toefl_reading ? String(profile.toefl_reading) : "",
+      toefl_listening: profile?.toefl_listening ? String(profile.toefl_listening) : "",
+      toefl_speaking: profile?.toefl_speaking ? String(profile.toefl_speaking) : "",
+      toefl_writing: profile?.toefl_writing ? String(profile.toefl_writing) : "",
+      duolingo_score: profile?.duolingo_score ? String(profile.duolingo_score) : "",
+      a_level_subjects: profile?.a_level_subjects ?? "",
+      a_level_predicted: profile?.a_level_predicted ?? "",
+      ap_subjects: profile?.ap_subjects ?? "",
+      ib_predicted_score: profile?.ib_predicted_score ? String(profile.ib_predicted_score) : "",
+      unt_score: profile?.unt_score ? String(profile.unt_score) : "",
+      nis_grade12_certificate_gpa: profile?.nis_grade12_certificate_gpa ?? "",
+      preferred_countries: Array.isArray(saved.preferred_countries) ? saved.preferred_countries.join(", ") : "United States, United Arab Emirates, Canada",
+      preferred_regions: Array.isArray(saved.preferred_regions) ? saved.preferred_regions.join(", ") : "USA, Abu Dhabi / UAE, Canada, Hong Kong, Korea, Japan, Europe",
+      teaching_language: typeof saved.teaching_language === "string" ? saved.teaching_language : "English",
+      school_years: saved.school_years ? String(saved.school_years) : "11",
+      needs_full_ride: typeof saved.needs_full_ride === "boolean" ? saved.needs_full_ride : true,
+    });
+    setLoadedProfile(true);
+  }, [form, loadedProfile, profileData]);
 
   const handleNext = async () => {
     const values = form.getValues();
@@ -97,9 +158,26 @@ export default function OnboardingPage() {
     } else if (step === 3) {
       await updateProfileMutation.mutateAsync({
         sat_score: values.sat_score ? parseInt(values.sat_score, 10) : undefined,
+        sat_math: values.sat_math ? parseInt(values.sat_math, 10) : undefined,
+        sat_ebrw: values.sat_ebrw ? parseInt(values.sat_ebrw, 10) : undefined,
         act_score: values.act_score ? parseInt(values.act_score, 10) : undefined,
         ielts_score: values.ielts_score || undefined,
+        ielts_listening: values.ielts_listening || undefined,
+        ielts_reading: values.ielts_reading || undefined,
+        ielts_writing: values.ielts_writing || undefined,
+        ielts_speaking: values.ielts_speaking || undefined,
         toefl_score: values.toefl_score ? parseInt(values.toefl_score, 10) : undefined,
+        toefl_reading: values.toefl_reading ? parseInt(values.toefl_reading, 10) : undefined,
+        toefl_listening: values.toefl_listening ? parseInt(values.toefl_listening, 10) : undefined,
+        toefl_speaking: values.toefl_speaking ? parseInt(values.toefl_speaking, 10) : undefined,
+        toefl_writing: values.toefl_writing ? parseInt(values.toefl_writing, 10) : undefined,
+        duolingo_score: values.duolingo_score ? parseInt(values.duolingo_score, 10) : undefined,
+        a_level_subjects: values.a_level_subjects || undefined,
+        a_level_predicted: values.a_level_predicted || undefined,
+        ap_subjects: values.ap_subjects || undefined,
+        ib_predicted_score: values.ib_predicted_score ? parseInt(values.ib_predicted_score, 10) : undefined,
+        unt_score: values.unt_score ? parseInt(values.unt_score, 10) : undefined,
+        nis_grade12_certificate_gpa: values.nis_grade12_certificate_gpa || undefined,
       });
     } else if (step === 4) {
       await updateProfileMutation.mutateAsync({
@@ -240,10 +318,42 @@ export default function OnboardingPage() {
             {step === 3 && (
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2 md:col-span-2"><p className="text-sm leading-relaxed text-slate-500">These inputs are optional. Skip anything you do not already have.</p></div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>SAT</Label><Input type="number" min={400} max={1600} placeholder="1450" className="mt-2 h-11 rounded-xl" {...form.register("sat_score")} /></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+                  <Label>SAT</Label>
+                  <div className="mt-2 grid gap-3 md:grid-cols-3">
+                    <Input type="number" min={400} max={1600} placeholder="Total 1450" className="h-11 rounded-xl" {...form.register("sat_score")} />
+                    <Input type="number" min={200} max={800} placeholder="Math 760" className="h-11 rounded-xl" {...form.register("sat_math")} />
+                    <Input type="number" min={200} max={800} placeholder="Reading/Writing 690" className="h-11 rounded-xl" {...form.register("sat_ebrw")} />
+                  </div>
+                </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>ACT</Label><Input type="number" min={1} max={36} placeholder="32" className="mt-2 h-11 rounded-xl" {...form.register("act_score")} /></div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>IELTS</Label><Input placeholder="7.5" className="mt-2 h-11 rounded-xl" {...form.register("ielts_score")} /></div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>TOEFL</Label><Input type="number" min={0} max={120} placeholder="105" className="mt-2 h-11 rounded-xl" {...form.register("toefl_score")} /></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>Duolingo English Test</Label><Input type="number" min={10} max={160} placeholder="135" className="mt-2 h-11 rounded-xl" {...form.register("duolingo_score")} /></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+                  <Label>IELTS</Label>
+                  <div className="mt-2 grid gap-3 md:grid-cols-5">
+                    <Input placeholder="Overall 7.5" className="h-11 rounded-xl" {...form.register("ielts_score")} />
+                    <Input placeholder="Listening" className="h-11 rounded-xl" {...form.register("ielts_listening")} />
+                    <Input placeholder="Reading" className="h-11 rounded-xl" {...form.register("ielts_reading")} />
+                    <Input placeholder="Writing" className="h-11 rounded-xl" {...form.register("ielts_writing")} />
+                    <Input placeholder="Speaking" className="h-11 rounded-xl" {...form.register("ielts_speaking")} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+                  <Label>TOEFL iBT</Label>
+                  <div className="mt-2 grid gap-3 md:grid-cols-5">
+                    <Input type="number" min={0} max={120} placeholder="Total 105" className="h-11 rounded-xl" {...form.register("toefl_score")} />
+                    <Input type="number" min={0} max={30} placeholder="Reading" className="h-11 rounded-xl" {...form.register("toefl_reading")} />
+                    <Input type="number" min={0} max={30} placeholder="Listening" className="h-11 rounded-xl" {...form.register("toefl_listening")} />
+                    <Input type="number" min={0} max={30} placeholder="Speaking" className="h-11 rounded-xl" {...form.register("toefl_speaking")} />
+                    <Input type="number" min={0} max={30} placeholder="Writing" className="h-11 rounded-xl" {...form.register("toefl_writing")} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>A-Level subjects</Label><Input placeholder="Math A*, Physics A, CS A" className="mt-2 h-11 rounded-xl" {...form.register("a_level_subjects")} /></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>A-Level predicted</Label><Input placeholder="A*A*A" className="mt-2 h-11 rounded-xl" {...form.register("a_level_predicted")} /></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>IB predicted score</Label><Input type="number" min={1} max={45} placeholder="40" className="mt-2 h-11 rounded-xl" {...form.register("ib_predicted_score")} /></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>AP subjects</Label><Input placeholder="Calc BC 5, Physics C 5" className="mt-2 h-11 rounded-xl" {...form.register("ap_subjects")} /></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>UNT / ENT</Label><Input type="number" min={0} placeholder="Score" className="mt-2 h-11 rounded-xl" {...form.register("unt_score")} /></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><Label>NIS Grade 12 Certificate</Label><Input placeholder="GPA / predicted result" className="mt-2 h-11 rounded-xl" {...form.register("nis_grade12_certificate_gpa")} /></div>
               </div>
             )}
 

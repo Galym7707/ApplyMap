@@ -13,7 +13,10 @@ router = APIRouter(prefix="/api/profile", tags=["profile"])
 def get_profile(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     profile = db.query(StudentProfile).filter(StudentProfile.user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        profile = StudentProfile(user_id=current_user.id)
+        db.add(profile)
+        db.commit()
+        db.refresh(profile)
     return {
         "data": {
             "user": UserOut.model_validate(current_user).model_dump(),

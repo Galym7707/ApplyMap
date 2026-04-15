@@ -7,6 +7,7 @@ def ensure_application_schema() -> None:
     inspector = inspect(engine)
     student_profile_columns = {column["name"] for column in inspector.get_columns("student_profiles")}
     university_columns = {column["name"] for column in inspector.get_columns("universities")}
+    target_university_columns = {column["name"] for column in inspector.get_columns("target_universities")}
 
     if "application_preferences_json" not in student_profile_columns:
         column_type = "JSONB" if engine.dialect.name == "postgresql" else "JSON"
@@ -14,6 +15,35 @@ def ensure_application_schema() -> None:
             connection.execute(
                 text(f"ALTER TABLE student_profiles ADD COLUMN application_preferences_json {column_type}")
             )
+
+    student_profile_column_defs = {
+        "sat_math": "INTEGER",
+        "sat_ebrw": "INTEGER",
+        "ielts_listening": "VARCHAR(10)",
+        "ielts_reading": "VARCHAR(10)",
+        "ielts_writing": "VARCHAR(10)",
+        "ielts_speaking": "VARCHAR(10)",
+        "toefl_reading": "INTEGER",
+        "toefl_listening": "INTEGER",
+        "toefl_speaking": "INTEGER",
+        "toefl_writing": "INTEGER",
+        "duolingo_score": "INTEGER",
+        "a_level_subjects": "VARCHAR(500)",
+        "a_level_predicted": "VARCHAR(255)",
+        "ap_subjects": "VARCHAR(500)",
+        "ib_predicted_score": "INTEGER",
+        "unt_score": "INTEGER",
+        "nis_grade12_certificate_gpa": "VARCHAR(50)",
+    }
+    missing_student_profile_columns = [
+        (name, column_type)
+        for name, column_type in student_profile_column_defs.items()
+        if name not in student_profile_columns
+    ]
+    if missing_student_profile_columns:
+        with engine.begin() as connection:
+            for name, column_type in missing_student_profile_columns:
+                connection.execute(text(f"ALTER TABLE student_profiles ADD COLUMN {name} {column_type}"))
 
     json_type = "JSONB" if engine.dialect.name == "postgresql" else "JSON"
     university_column_defs = {
@@ -45,3 +75,9 @@ def ensure_application_schema() -> None:
         with engine.begin() as connection:
             for name, column_type in missing_university_columns:
                 connection.execute(text(f"ALTER TABLE universities ADD COLUMN {name} {column_type}"))
+
+    if "fit_category" not in target_university_columns:
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE target_universities ADD COLUMN fit_category VARCHAR(20) DEFAULT 'target' NOT NULL")
+            )
