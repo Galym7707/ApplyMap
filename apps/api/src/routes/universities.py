@@ -148,15 +148,21 @@ def university_advisor_plan(
 ):
     profile = current_user.profile
     intended_major = payload.intended_major or (profile.intended_major if profile else None)
+    search_warning = None
     try:
         search_results = search_university_sources(payload.university_name, intended_major)
     except SearchNotConfiguredError:
-        raise HTTPException(
-            status_code=503,
-            detail="Google Custom Search is not configured. Set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID.",
+        search_results = []
+        search_warning = (
+            "Google Custom Search is not configured. Set GOOGLE_SEARCH_API_KEY and "
+            "GOOGLE_SEARCH_ENGINE_ID to enable source-backed live search."
         )
     except Exception:
-        raise HTTPException(status_code=502, detail="Google Custom Search request failed")
+        search_results = []
+        search_warning = (
+            "Google Custom Search is currently unavailable or misconfigured. The plan below is limited "
+            "to saved profile data and cannot confirm current university facts."
+        )
 
     achievements = (
         db.query(Achievement)
@@ -171,6 +177,9 @@ def university_advisor_plan(
         achievements=achievements,
         search_results=search_results,
     )
+    if search_warning:
+        plan.setdefault("source_notes", [])
+        plan["source_notes"] = [search_warning, *plan["source_notes"]]
     return {
         "data": {
             "university_name": payload.university_name,

@@ -6,6 +6,7 @@ import httpx
 
 from ..config import settings
 from .chancellor_analysis import ADMISSIONS_FRAMEWORK
+from .counselor_knowledge import CHANCELLOR_COUNSELOR_FRAMEWORK
 
 
 ADVISOR_SCHEMA = {
@@ -201,9 +202,11 @@ def _prompt(
         "and 11 vs 12 years of schooling as important fit factors. MESK in Russian/Kazakh user language maps "
         "to NIS Grade 12 Certificate in English.\n\n"
         f"{ADMISSIONS_FRAMEWORK}\n\n"
+        f"{CHANCELLOR_COUNSELOR_FRAMEWORK}\n\n"
         "Be direct. Avoid motivational filler. Identify exams that could materially improve the application, "
         "activities that are low-value for this target, and research or summer programs only when they appear "
-        "in the supplied source results. Return JSON only.\n\n"
+        "in the supplied source results. If google_search_results is empty, say current university facts cannot "
+        "be confirmed and give only general next steps that do not depend on current requirements. Return JSON only.\n\n"
         f"Input JSON:\n{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
 

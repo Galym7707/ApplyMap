@@ -7,11 +7,12 @@ import httpx
 
 from ..config import settings
 from ..models.achievement import AchievementType, ImpactScope, LeadershipLevel
+from .counselor_knowledge import CHANCELLOR_COUNSELOR_FRAMEWORK
 
-MAX_IMPORT_BYTES = 200_000
-MAX_IMPORT_CHARS = 16_000
+MAX_IMPORT_BYTES = 10_000_000
+MAX_IMPORT_CHARS = 80_000
 DEFAULT_WORD_LIMIT = 22
-MAX_IMPORTED_ITEMS = 30
+MAX_IMPORTED_ITEMS = 60
 MAX_TOP_ACTIVITIES = 10
 MAX_TOP_HONORS = 5
 COMMON_APP_ACTIVITY_POSITION_LIMIT = 50
@@ -29,6 +30,7 @@ IMPORT_SCHEMA = {
         "additional_information_reason": {"type": "string"},
         "additional_information_draft": {"type": "string"},
         "formatting_notes": {"type": "array", "items": {"type": "string"}},
+        "extraction_notes": {"type": "array", "items": {"type": "string"}},
         "items": {
             "type": "array",
             "items": {
@@ -92,6 +94,7 @@ IMPORT_SCHEMA = {
         "additional_information_reason",
         "additional_information_draft",
         "formatting_notes",
+        "extraction_notes",
         "items",
     ],
 }
@@ -135,6 +138,64 @@ def _profile_context(user: Optional[Any]) -> dict[str, Any]:
 
 def _compact_whitespace(value: str) -> str:
     return re.sub(r"\s+", " ", value or "").strip()
+
+
+def _normalize_student_facing_text(value: str) -> str:
+    text = _compact_whitespace(value)
+    text = re.sub(r"\bRepublican\b", "National", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bRespublikalyk\b", "National", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bRespublikanskiy\b", "National", text, flags=re.IGNORECASE)
+    for index, char in enumerate(text):
+        if char.isalpha():
+            text = text[:index] + char.upper() + text[index + 1 :]
+            break
+    return text
+
+
+def _preserve_source_structure(value: str) -> str:
+    lines = []
+    for line in (value or "").replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        cleaned = re.sub(r"[ \t\f\v]+", " ", line).strip()
+        if cleaned:
+            lines.append(cleaned)
+        elif lines and lines[-1] != "":
+            lines.append("")
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
+def _source_excerpts(raw_text: str, *, max_items: int = 8, max_chars: int = 240) -> list[str]:
+    scored: list[tuple[int, int, str]] = []
+    keywords = (
+        "award",
+        "winner",
+        "honor",
+        "activities",
+        "president",
+        "captain",
+        "founder",
+        "research",
+        "olympiad",
+        "competition",
+        "volunteer",
+        "raised",
+        "published",
+        "selected",
+        "national",
+        "international",
+        "hr/wk",
+        "wk/yr",
+    )
+    for chunk in re.split(r"(?:\n\s*){1,}|(?:\s*[•\u2022*]\s+)", raw_text):
+        text = _compact_whitespace(chunk)
+        if len(text) < 18:
+            continue
+        lower = text.lower()
+        score = sum(2 for keyword in keywords if keyword in lower)
+        if any(char.isdigit() for char in text):
+            score += 1
+        scored.append((score, len(scored), _truncate_characters(text, max_chars)))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [text for _, _, text in scored[:max_items]]
 
 
 def _count_words(value: str) -> int:
@@ -250,7 +311,7 @@ def _extract_docx_text(raw_bytes: bytes) -> str:
 
 def decode_import_file(file_name: str, raw_bytes: bytes) -> str:
     if len(raw_bytes) > MAX_IMPORT_BYTES:
-        raise ValueError("File is too large for MVP bulk import. Keep it under 200 KB.")
+        raise ValueError("File is too large for import. Keep it under 10 MB.")
 
     extension = os.path.splitext(file_name or "")[1].lower()
     supported = {".txt", ".md", ".csv", ".json", ".pdf", ".docx"}
@@ -273,7 +334,7 @@ def decode_import_file(file_name: str, raw_bytes: bytes) -> str:
         else:
             raise ValueError("Could not read the uploaded file as text.")
 
-    text = _compact_whitespace(text).strip()
+    text = _preserve_source_structure(text)
     if not text:
         raise ValueError("The uploaded file is empty.")
     return text[:MAX_IMPORT_CHARS]
@@ -306,7 +367,7 @@ def _fallback_common_app_text(item: dict[str, Any], word_limit: int) -> str:
 
 
 def _fallback_parse(raw_text: str, user: Optional[Any], word_limit: int) -> dict[str, Any]:
-    from .chancellor_analysis import estimate_chancellor_scores
+    from .chancellor_analysis import _heuristic_scores
 
     lines = [
         _compact_whitespace(line)
@@ -332,7 +393,7 @@ def _fallback_parse(raw_text: str, user: Optional[Any], word_limit: int) -> dict
             "truth_risk_flag": False,
             "selection_reason": "Selected by heuristic fallback because AI extraction was unavailable.",
         }
-        scores = estimate_chancellor_scores(base_item, user)
+        scores = _heuristic_scores(base_item, user)
         item = {
             **base_item,
             **scores,
@@ -362,11 +423,19 @@ def _fallback_parse(raw_text: str, user: Optional[Any], word_limit: int) -> dict
         "additional_information_reason": "",
         "additional_information_draft": "",
         "formatting_notes": ["Gemini extraction was unavailable, so ApplyMap used a conservative local fallback."],
+        "extraction_notes": [
+            f"Local fallback split the source into {len(items)} candidate achievement lines."
+        ],
         "items": items,
     }
 
 
-def _import_prompt(raw_text: str, user: Optional[Any], word_limit: int) -> str:
+def _import_prompt(
+    raw_text: str,
+    user: Optional[Any],
+    word_limit: int,
+    clarification_answers: Optional[dict[str, str]] = None,
+) -> str:
     payload = {
         "student_profile": _profile_context(user),
         "word_limit": word_limit,
@@ -378,13 +447,16 @@ def _import_prompt(raw_text: str, user: Optional[Any], word_limit: int) -> str:
             "honors_max_items": MAX_TOP_HONORS,
             "honor_title_description_chars": COMMON_APP_HONOR_DESCRIPTION_LIMIT,
         },
+        "source_excerpts": _source_excerpts(raw_text),
+        "student_clarification_answers": clarification_answers or {},
         "raw_source_text": raw_text,
     }
     return (
         "You are ApplyMap Chancellor, helping an international student convert a messy mixed-achievement note file "
-        "into a clean, factual Common App-ready shortlist.\n\n"
+        "into a clean, factual application-ready shortlist.\n\n"
+        f"{CHANCELLOR_COUNSELOR_FRAMEWORK}\n\n"
         "Tasks:\n"
-        "1. Extract distinct student achievements from the raw text. Merge obvious duplicates into one strongest version.\n"
+        "1. Extract every distinct student achievement from the raw text before ranking. Merge only true duplicates.\n"
         "2. Classify each item as either 'activity' or 'honor'.\n"
         "3. Fill structured fields conservatively. If a field is missing, use null instead of inventing facts.\n"
         "4. Score each item from 0 to 10 on major_relevance_score, selectivity_score, continuity_score, and distinctiveness_score.\n"
@@ -400,12 +472,28 @@ def _import_prompt(raw_text: str, user: Optional[Any], word_limit: int) -> str:
         "10. Recommend Additional Information only when it is genuinely needed to clarify important context that cannot fit "
         "in the activity/honor fields, unusual school/curriculum context, or multiple related awards. If recommended, write a "
         "ready-to-paste concise additional_information_draft; otherwise leave it blank.\n\n"
+        "11. If student_clarification_answers includes an answer to a missing detail, use that answer to improve the fields, "
+        "scores, ranking, and Common App wording. Do not keep asking the same question unless the answer is still unclear.\n\n"
         "Important constraints:\n"
         "- Do not invent achievements, outcomes, metrics, organizations, dates, leadership roles, or awards.\n"
+        "- Output all student-facing fields in polished English even when the source is Russian, Kazakh, or mixed-language.\n"
+        "- Fix lowercase or informal source phrasing into proper English capitalization and grammar.\n"
+        "- Preserve years, date ranges, school grade, event names, number of students served, placements, and supported metrics. "
+        "Do not remove these facts just to make the sentence shorter.\n"
+        "- Never replace a concrete source detail with a guessed or more impressive detail. If the source says gift cards, "
+        "lessons, mentoring, or another specific activity, translate that detail directly; do not invent tournaments, "
+        "research, publications, awards, or program names.\n"
+        "- Translate Kazakhstan award level words like Republican/Respublikalyk/Respublikanskiy as National unless the "
+        "official English title clearly uses Republican.\n"
+        "- If the source says the student mentored five 8th graders as an 11th grader in 2024-2025 and organized events, "
+        "keep those facts in concise English instead of reducing the entry to a generic mentoring sentence.\n"
         "- If the source sounds uncertain or inflated, set truth_risk_flag to true.\n"
         "- Prefer concrete, specific language over hype.\n"
         "- Preserve Kazakhstan/NIS/IB/A-Level context when present.\n"
-        "- In English output, MESK/МЭСК means NIS Grade 12 Certificate.\n"
+        "- Treat MESK written in Russian or Kazakh as NIS Grade 12 Certificate in English output.\n"
+        "- For Korean university targets, do not assume Common App. Korea entries may need Study in Korea, KAIST Apply, "
+        "UwayApply, JinhakApply, or a university-specific format. Mark Korea-specific wording as application-ready, and "
+        "ask for the target portal if the limit is unclear.\n"
         "- Apply the College Essay Guy-style approach: active verbs, measurable impact, no filler, no repeated role wording, "
         "selectivity where supported, and abbreviations only when they improve clarity.\n"
         "- If the student omits participant counts, selection rates, dates, or exact award level, add those to "
@@ -423,7 +511,12 @@ def _extract_gemini_text(response_payload: dict[str, Any]) -> str:
     return str(parts[0].get("text", "")) if parts else ""
 
 
-def _gemini_parse(raw_text: str, user: Optional[Any], word_limit: int) -> Optional[dict[str, Any]]:
+def _gemini_parse(
+    raw_text: str,
+    user: Optional[Any],
+    word_limit: int,
+    clarification_answers: Optional[dict[str, str]] = None,
+) -> Optional[dict[str, Any]]:
     api_key = settings.GEMINI_API_KEY.strip()
     if not api_key:
         return None
@@ -431,16 +524,17 @@ def _gemini_parse(raw_text: str, user: Optional[Any], word_limit: int) -> Option
     model = (settings.GEMINI_MODEL or "gemini-2.5-flash").strip()
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     payload = {
-        "contents": [{"parts": [{"text": _import_prompt(raw_text, user, word_limit)}]}],
+        "contents": [{"parts": [{"text": _import_prompt(raw_text, user, word_limit, clarification_answers)}]}],
         "generationConfig": {
             "temperature": 0.1,
+            "maxOutputTokens": 30000,
             "responseMimeType": "application/json",
             "responseJsonSchema": IMPORT_SCHEMA,
         },
     }
 
     try:
-        with httpx.Client(timeout=25.0) as client:
+        with httpx.Client(timeout=90.0) as client:
             response = client.post(
                 url,
                 headers={
@@ -478,7 +572,7 @@ def _google_search(query: str, *, num: int = 3) -> list[dict[str, str]]:
     if not api_key or not engine_id:
         raise SearchNotConfiguredError("Google Custom Search is not configured")
 
-    with httpx.Client(timeout=12.0) as client:
+    with httpx.Client(timeout=5.0) as client:
         response = client.get(
             "https://www.googleapis.com/customsearch/v1",
             params={
@@ -537,10 +631,9 @@ def _attach_google_verification(items: list[dict[str, Any]], user: Optional[Any]
         try:
             search_results = _google_search(query, num=3)
         except (SearchNotConfiguredError, httpx.HTTPError):
-            item.setdefault("missing_or_unclear_facts", []).append(
-                "Google verification failed for this item; ask the student for an official link or evidence."
-            )
-            continue
+            return [
+                "Google verification is currently unavailable. Ask the student for official links, certificates, or organizer pages for unsupported claims."
+            ]
 
         if not search_results:
             item.setdefault("missing_or_unclear_facts", []).append(
@@ -558,7 +651,7 @@ def _normalize_items(result: dict[str, Any], word_limit: int) -> dict[str, Any]:
     normalized_items: list[dict[str, Any]] = []
 
     for index, raw_item in enumerate(result.get("items") or [], start=1):
-        title = _compact_whitespace(str(raw_item.get("title") or ""))
+        title = _normalize_student_facing_text(str(raw_item.get("title") or ""))
         if not title:
             continue
 
@@ -567,10 +660,10 @@ def _normalize_items(result: dict[str, Any], word_limit: int) -> dict[str, Any]:
             "source_index": int(raw_item.get("source_index") or index),
             "type": item_type.value,
             "title": title[:500],
-            "organization_name": _compact_whitespace(str(raw_item.get("organization_name") or "")) or None,
-            "role_title": _compact_whitespace(str(raw_item.get("role_title") or "")) or None,
-            "description_raw": _compact_whitespace(str(raw_item.get("description_raw") or "")) or None,
-            "category": _compact_whitespace(str(raw_item.get("category") or "")) or None,
+            "organization_name": _normalize_student_facing_text(str(raw_item.get("organization_name") or "")) or None,
+            "role_title": _normalize_student_facing_text(str(raw_item.get("role_title") or "")) or None,
+            "description_raw": _normalize_student_facing_text(str(raw_item.get("description_raw") or "")) or None,
+            "category": _normalize_student_facing_text(str(raw_item.get("category") or "")) or None,
             "hours_per_week": raw_item.get("hours_per_week"),
             "weeks_per_year": raw_item.get("weeks_per_year"),
             "impact_scope": (_coerce_enum(ImpactScope, raw_item.get("impact_scope")) or None),
@@ -580,19 +673,19 @@ def _normalize_items(result: dict[str, Any], word_limit: int) -> dict[str, Any]:
             "selectivity_score": _clamp_score(raw_item.get("selectivity_score")),
             "continuity_score": _clamp_score(raw_item.get("continuity_score")),
             "distinctiveness_score": _clamp_score(raw_item.get("distinctiveness_score")),
-            "selection_reason": _compact_whitespace(str(raw_item.get("selection_reason") or "")),
+            "selection_reason": _normalize_student_facing_text(str(raw_item.get("selection_reason") or "")),
             "common_app_text": _enforce_common_app_limit(
-                str(raw_item.get("common_app_text") or ""),
+                _normalize_student_facing_text(str(raw_item.get("common_app_text") or "")),
                 word_limit,
                 item_type.value,
             ),
-            "common_app_position": _compact_whitespace(str(raw_item.get("common_app_position") or "")) or None,
-            "common_app_organization": _compact_whitespace(str(raw_item.get("common_app_organization") or "")) or None,
-            "common_app_activity_description": _compact_whitespace(
+            "common_app_position": _normalize_student_facing_text(str(raw_item.get("common_app_position") or "")) or None,
+            "common_app_organization": _normalize_student_facing_text(str(raw_item.get("common_app_organization") or "")) or None,
+            "common_app_activity_description": _normalize_student_facing_text(
                 str(raw_item.get("common_app_activity_description") or "")
             )
             or None,
-            "common_app_honor_description": _compact_whitespace(str(raw_item.get("common_app_honor_description") or ""))
+            "common_app_honor_description": _normalize_student_facing_text(str(raw_item.get("common_app_honor_description") or ""))
             or None,
             "verification_queries": _clean_string_list(raw_item.get("verification_queries"), max_items=3, max_chars=160),
             "verification_notes": _clean_string_list(raw_item.get("verification_notes"), max_items=5, max_chars=300),
@@ -625,12 +718,21 @@ def _normalize_items(result: dict[str, Any], word_limit: int) -> dict[str, Any]:
         "additional_information_reason": _compact_whitespace(str(result.get("additional_information_reason") or "")),
         "additional_information_draft": _compact_whitespace(str(result.get("additional_information_draft") or "")),
         "formatting_notes": _clean_string_list(result.get("formatting_notes"), max_items=8, max_chars=220),
+        "extraction_notes": _clean_string_list(result.get("extraction_notes"), max_items=8, max_chars=220),
         "items": normalized_items,
     }
 
 
-def parse_achievement_import(raw_text: str, user: Optional[Any], word_limit: int) -> dict[str, Any]:
-    parsed = _gemini_parse(raw_text, user, word_limit) or _fallback_parse(raw_text, user, word_limit)
+def parse_achievement_import(
+    raw_text: str,
+    user: Optional[Any],
+    word_limit: int,
+    clarification_answers: Optional[dict[str, str]] = None,
+) -> dict[str, Any]:
+    parsed = _gemini_parse(raw_text, user, word_limit, clarification_answers)
+    used_gemini = parsed is not None
+    if parsed is None:
+        parsed = _fallback_parse(raw_text, user, word_limit)
     normalized = _normalize_items(parsed, word_limit)
     items = normalized["items"]
 
@@ -680,4 +782,43 @@ def parse_achievement_import(raw_text: str, user: Optional[Any], word_limit: int
         user,
     )
     normalized["formatting_notes"].extend(verification_notes)
+    normalized["source_excerpts"] = _source_excerpts(raw_text)
+    normalized["processing_steps"] = [
+        {
+            "key": "read_file",
+            "label": "Read uploaded file",
+            "status": "complete",
+            "detail": f"Extracted {len(raw_text):,} characters while preserving line breaks and bullet structure.",
+        },
+        {
+            "key": "extract_candidates",
+            "label": "Extract achievement candidates",
+            "status": "complete",
+            "detail": f"Built {len(items)} structured candidates from the source text.",
+        },
+        {
+            "key": "rank_shortlist",
+            "label": "Rank activities and honors",
+            "status": "complete",
+            "detail": f"Selected {len(normalized['top_activities'])} activities and {len(normalized['top_honors'])} honors for Common App.",
+        },
+        {
+            "key": "format_common_app",
+            "label": "Format Common App fields",
+            "status": "complete",
+            "detail": "Enforced 50/100/150-character activity fields and 100-character honor lines.",
+        },
+        {
+            "key": "verify_claims",
+            "label": "Check uncertainty and verification needs",
+            "status": "complete",
+            "detail": "Generated clarification questions and verification notes for unsupported claims.",
+        },
+        {
+            "key": "ai_engine",
+            "label": "AI extraction engine",
+            "status": "complete",
+            "detail": "Gemini returned structured JSON." if used_gemini else "Gemini was unavailable or returned invalid JSON; used local fallback.",
+        },
+    ]
     return normalized

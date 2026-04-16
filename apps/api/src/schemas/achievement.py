@@ -94,6 +94,13 @@ class AchievementImportSelectionItem(BaseModel):
     missing_or_unclear_facts: List[str] = []
 
 
+class AchievementImportStep(BaseModel):
+    key: str
+    label: str
+    status: str
+    detail: str
+
+
 class AchievementImportOut(BaseModel):
     file_name: str
     word_limit: int
@@ -105,6 +112,9 @@ class AchievementImportOut(BaseModel):
     additional_information_reason: Optional[str] = None
     additional_information_draft: Optional[str] = None
     formatting_notes: List[str] = []
+    extraction_notes: List[str] = []
+    source_excerpts: List[str] = []
+    processing_steps: List[AchievementImportStep] = []
     imported_achievements: List[AchievementOut]
     top_activities: List[AchievementImportSelectionItem]
     top_honors: List[AchievementImportSelectionItem]

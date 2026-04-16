@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -157,6 +159,8 @@ async def upload_evidence(
 async def import_all_achievements(
     file: UploadFile = File(...),
     word_limit: int = Form(22),
+    clarification_answers: Optional[str] = Form(None),
+    previous_import_ids: Optional[str] = Form(None),
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -169,7 +173,41 @@ async def import_all_achievements(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    parsed = parse_achievement_import(raw_text, current_user, word_limit)
+    parsed_clarification_answers: dict[str, str] = {}
+    if clarification_answers:
+        try:
+            raw_answers = json.loads(clarification_answers)
+            if isinstance(raw_answers, dict):
+                parsed_clarification_answers = {
+                    str(key): str(value).strip()
+                    for key, value in raw_answers.items()
+                    if str(value).strip()
+                }
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail="Invalid clarification answers JSON.") from exc
+
+    parsed_previous_ids: list[UUID] = []
+    if previous_import_ids:
+        try:
+            raw_ids = json.loads(previous_import_ids)
+            if isinstance(raw_ids, list):
+                parsed_previous_ids = [UUID(str(value)) for value in raw_ids]
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid previous import ids JSON.") from exc
+
+    parsed = parse_achievement_import(
+        raw_text,
+        current_user,
+        word_limit,
+        parsed_clarification_answers,
+    )
+
+    if parsed_previous_ids:
+        db.query(Achievement).filter(
+            Achievement.user_id == current_user.id,
+            Achievement.id.in_(parsed_previous_ids),
+        ).delete(synchronize_session=False)
+        db.flush()
 
     imported_achievements: list[Achievement] = []
     selection_items: list[tuple[Achievement, dict]] = []
@@ -249,6 +287,17 @@ async def import_all_achievements(
             additional_information_reason=parsed.get("additional_information_reason") or None,
             additional_information_draft=parsed.get("additional_information_draft") or None,
             formatting_notes=parsed.get("formatting_notes", []),
+            extraction_notes=parsed.get("extraction_notes", []),
+            source_excerpts=parsed.get("source_excerpts", []),
+            processing_steps=[
+                *parsed.get("processing_steps", []),
+                {
+                    "key": "save_vault",
+                    "label": "Save imported achievements",
+                    "status": "complete",
+                    "detail": f"Saved {len(imported_achievements)} extracted items to Achievement Vault.",
+                },
+            ],
             imported_achievements=[
                 AchievementOut.model_validate(achievement).model_dump()
                 for achievement in imported_achievements

@@ -80,10 +80,20 @@ export const achievementsApi = {
   create: (data: Record<string, unknown>) => api.post("/api/achievements", data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/api/achievements/${id}`, data),
   delete: (id: string) => api.delete(`/api/achievements/${id}`),
-  importAll: (file: File, wordLimit: number) => {
+  importAll: (
+    file: File,
+    wordLimit: number,
+    options?: { clarificationAnswers?: Record<string, string>; previousImportIds?: string[] }
+  ) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("word_limit", String(wordLimit));
+    if (options?.clarificationAnswers) {
+      formData.append("clarification_answers", JSON.stringify(options.clarificationAnswers));
+    }
+    if (options?.previousImportIds?.length) {
+      formData.append("previous_import_ids", JSON.stringify(options.previousImportIds));
+    }
     return api.post("/api/achievements/import-all", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });

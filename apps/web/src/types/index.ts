@@ -106,6 +106,13 @@ export interface AchievementImportSelectionItem {
   missing_or_unclear_facts: string[];
 }
 
+export interface AchievementImportStep {
+  key: string;
+  label: string;
+  status: "pending" | "active" | "complete" | "error" | string;
+  detail: string;
+}
+
 export interface AchievementImportResult {
   file_name: string;
   word_limit: number;
@@ -117,6 +124,9 @@ export interface AchievementImportResult {
   additional_information_reason?: string;
   additional_information_draft?: string;
   formatting_notes: string[];
+  extraction_notes: string[];
+  source_excerpts: string[];
+  processing_steps: AchievementImportStep[];
   imported_achievements: Achievement[];
   top_activities: AchievementImportSelectionItem[];
   top_honors: AchievementImportSelectionItem[];

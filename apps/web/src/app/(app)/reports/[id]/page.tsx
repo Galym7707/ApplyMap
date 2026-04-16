@@ -26,10 +26,32 @@ const CONFIDENCE_COLORS = {
   low: "bg-slate-100 text-slate-600",
 };
 
+function getRewriteFormat(report: ReportDetail, achievementType: string) {
+  const haystack = [report.university.name, report.university.country, report.university.application_system]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (haystack.includes("korea") || ["kaist", "unist", "postech", "yonsei"].some((token) => haystack.includes(token))) {
+    if (haystack.includes("kaist")) {
+      return { label: "KAIST Apply", limit: 200, unit: "English bytes/chars" };
+    }
+    return { label: "Korean university application", limit: 300, unit: "English bytes/chars" };
+  }
+
+  if (achievementType === "honor") {
+    return { label: "Common App honor", limit: 100, unit: "chars" };
+  }
+
+  return { label: "Common App activity", limit: 150, unit: "chars" };
+}
+
 function RewriteStudio({
+  report,
   recommendation,
   variants,
 }: {
+  report: ReportDetail;
   recommendation: Recommendation;
   variants: RewriteVariant[];
 }) {
@@ -42,6 +64,7 @@ function RewriteStudio({
   if (myVariants.length === 0) return null;
 
   const selected = myVariants.find((v) => v.style_mode === selectedStyle) ?? myVariants[0];
+  const rewriteFormat = getRewriteFormat(report, recommendation.achievement.type);
 
   return (
     <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -70,7 +93,7 @@ function RewriteStudio({
               >
                 {v.style_mode.replace("_", " ")}
                 {v.is_recommended && (
-                  <span className="ml-1 text-amber-400">★</span>
+                  <span className="ml-1 text-amber-500">recommended</span>
                 )}
               </button>
             ))}
@@ -95,11 +118,14 @@ function RewriteStudio({
               <p className="mb-1.5 text-xs font-medium text-slate-500 uppercase tracking-wider">
                 {selected.style_mode.replace("_", " ")} style
               </p>
+              <p className="mb-2 text-xs text-slate-500">
+                Target: {rewriteFormat.label}
+              </p>
               <div className="rounded-md bg-navy-50 border border-navy-200 p-3 text-sm text-navy-900">
                 {selected.text}
                 <div className="mt-2 flex items-center justify-between text-xs">
-                  <span className={cn("font-medium", selected.character_count > 150 ? "text-red-600" : "text-emerald-700")}>
-                    {selected.character_count}/150 chars
+                  <span className={cn("font-medium", selected.character_count > rewriteFormat.limit ? "text-red-600" : "text-emerald-700")}>
+                    {selected.character_count}/{rewriteFormat.limit} {rewriteFormat.unit}
                   </span>
                   <button
                     onClick={() => {
@@ -350,7 +376,7 @@ export default function ReportDetailPage({ params }: { params: { id: string } })
                     {rec.rationale && (
                       <p className="text-sm text-slate-600">{rec.rationale}</p>
                     )}
-                    <RewriteStudio recommendation={rec} variants={report.rewrite_variants} />
+                    <RewriteStudio report={report} recommendation={rec} variants={report.rewrite_variants} />
                   </div>
                 </div>
               </div>
@@ -396,7 +422,7 @@ export default function ReportDetailPage({ params }: { params: { id: string } })
                     {rec.rationale && (
                       <p className="text-sm text-slate-600">{rec.rationale}</p>
                     )}
-                    <RewriteStudio recommendation={rec} variants={report.rewrite_variants} />
+                    <RewriteStudio report={report} recommendation={rec} variants={report.rewrite_variants} />
                   </div>
                 </div>
               </div>
