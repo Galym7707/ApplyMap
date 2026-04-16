@@ -206,9 +206,9 @@ export function AllAchievementsPanel({
                   <Upload className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-900">Supported MVP formats</h3>
+                  <h3 className="text-sm font-semibold text-slate-900">Supported formats</h3>
                   <p className="mt-1 text-sm text-slate-600">
-                    Text-based `.txt`, `.md`, `.csv`, or `.json` files work best right now.
+                    `.pdf`, `.docx`, `.txt`, `.md`, `.csv`, or `.json` files are supported.
                   </p>
                   <p className="mt-2 text-xs leading-relaxed text-slate-500">
                     Best input shape: one note or bullet list with awards, leadership, volunteering,

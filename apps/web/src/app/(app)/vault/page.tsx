@@ -652,7 +652,7 @@ export default function VaultPage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json"
+          accept=".txt,.md,.csv,.json,.pdf,.docx,text/plain,text/markdown,text/csv,application/json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           className="hidden"
           onChange={handleImportFile}
         />
