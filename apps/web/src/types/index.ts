@@ -168,6 +168,7 @@ export interface Report {
   university_id: string;
   status: ReportStatus;
   summary_text?: string;
+  advisor_snapshot_json?: AdvisorSnapshot;
   version_number: number;
   created_at: string;
   completed_at?: string;
@@ -212,6 +213,29 @@ export interface ReportDetail extends Report {
   recommendations: Recommendation[];
   rewrite_variants: RewriteVariant[];
   source_references: SourceReference[];
+}
+
+export interface AdvisorProgram {
+  name: string;
+  why_it_matters: string;
+  funding_note: string;
+  priority: "full-funding" | "scholarship" | "verify" | string;
+}
+
+export interface AdvisorAction {
+  title: string;
+  detail: string;
+}
+
+export interface AdvisorSnapshot {
+  title: string;
+  subtitle: string;
+  target_major: string;
+  report_note: string;
+  focus_areas: string[];
+  research_programs: AdvisorProgram[];
+  funding_plan: string[];
+  action_plan: AdvisorAction[];
 }
 
 export interface ApiResponse<T> {

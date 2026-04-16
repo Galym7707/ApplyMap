@@ -100,7 +100,7 @@ function EmptyReports() {
         <rect x="35.5" y="40.5" width="9" height="7" rx="1.5" className="stroke-slate-400" strokeWidth="1.5" />
         <path d="M37.5 40.5 V38 A2.5 2.5 0 0 1 42.5 38 V40.5" className="stroke-slate-400" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
-      <p className="text-sm font-medium text-slate-600">No reports yet</p>
+      <p className="text-sm font-medium text-slate-600">No advisors yet</p>
       <p className="mt-1 text-xs text-slate-400">
         Generate one from the Universities page.
       </p>
@@ -201,16 +201,16 @@ export default function DashboardPage() {
     bannerMessage = "Start by adding your activities and honors to the vault.";
     bannerCTA = { href: "/vault", label: "Add achievements" };
   } else if (targets.length === 0) {
-    bannerMessage = "Good start. Select your target universities to unlock reports.";
+    bannerMessage = "Good start. Select your target universities to unlock advisors.";
     bannerCTA = { href: "/universities", label: "Choose universities" };
   } else if (!reports.some((r) => r.status === "completed")) {
-    bannerMessage = "You're ready. Generate your first optimization report.";
-    bannerCTA = { href: "/universities", label: "Generate report" };
+    bannerMessage = "You're ready. Generate your first university advisor.";
+    bannerCTA = { href: "/universities", label: "Open advisor" };
   } else {
     const latest = reports.find((r) => r.status === "completed");
     if (latest) {
-      bannerMessage = `Your latest ${latest.university.name} report is ready to review.`;
-      bannerCTA = { href: `/reports/${latest.id}`, label: "View report" };
+      bannerMessage = `Your latest ${latest.university.name} advisor is ready to review.`;
+      bannerCTA = { href: `/reports/${latest.id}`, label: "View advisor" };
     }
   }
 
@@ -233,7 +233,7 @@ export default function DashboardPage() {
       iconBg: "bg-amber-50",
       iconColor: "text-amber-700",
       title: "Select target universities",
-      subtitle: "Unlock personalized reports",
+      subtitle: "Unlock university advisors",
     });
   }
   if (achievements.length > 0 && targets.length > 0) {
@@ -242,7 +242,7 @@ export default function DashboardPage() {
       icon: FileText,
       iconBg: "bg-emerald-50",
       iconColor: "text-emerald-700",
-      title: "Generate a new report",
+      title: "Open a new advisor",
       subtitle: `${targets.length} target ${targets.length === 1 ? "university" : "universities"} ready`,
     });
   }
@@ -419,7 +419,7 @@ export default function DashboardPage() {
         {/* Reports */}
         <Card>
           <CardContent className="pt-5">
-            <p className="mb-3 text-xs font-medium text-slate-500">Reports Generated</p>
+            <p className="mb-3 text-xs font-medium text-slate-500">Advisors Generated</p>
             <div className="text-3xl font-bold tabular-nums text-slate-900">
               {reports.length}
             </div>
@@ -459,7 +459,7 @@ export default function DashboardPage() {
         {/* Recent reports */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <CardTitle className="text-base">Recent reports</CardTitle>
+            <CardTitle className="text-base">Recent advisors</CardTitle>
             <Link href="/reports" className="text-xs text-navy-700 hover:underline">
               View all
             </Link>

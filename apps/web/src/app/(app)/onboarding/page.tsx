@@ -19,7 +19,7 @@ const STEP_NOTES = [
   "This drives relevance in ranking and recommendations.",
   "Add only the exams you already have.",
   "These settings power the Common App recommender.",
-  "Choose a shortlist to carry into reports.",
+  "Choose a shortlist to carry into university advisors.",
   "Move into the dashboard and start the workflow.",
 ];
 
@@ -319,12 +319,12 @@ export default function OnboardingPage() {
                 <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-4xl">🎯</div>
                 <div>
                   <h3 className="text-3xl font-semibold tracking-tight text-slate-900">Profile complete</h3>
-                  <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-slate-500">You are ready to move into the dashboard, add achievements, and generate the first source-backed optimization report.</p>
+              <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-slate-500">You are ready to move into the dashboard, add achievements, and generate the first university advisor.</p>
                 </div>
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5"><p className="text-xs uppercase tracking-[0.16em] text-slate-400">Major</p><p className="mt-2 text-sm font-semibold text-slate-900">{form.getValues("intended_major") || "To be refined"}</p></div>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5"><p className="text-xs uppercase tracking-[0.16em] text-slate-400">Targets</p><p className="mt-2 text-sm font-semibold text-slate-900">{selectedTargets.length} selected</p></div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5"><p className="text-xs uppercase tracking-[0.16em] text-slate-400">Next step</p><p className="mt-2 text-sm font-semibold text-slate-900">Fill the vault and generate reports</p></div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5"><p className="text-xs uppercase tracking-[0.16em] text-slate-400">Next step</p><p className="mt-2 text-sm font-semibold text-slate-900">Fill the vault and open advisors</p></div>
                 </div>
               </div>
             )}

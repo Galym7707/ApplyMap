@@ -57,6 +57,7 @@ class OptimizationReport(Base):
     university_id = Column(UUID(as_uuid=True), ForeignKey("universities.id", ondelete="CASCADE"), nullable=False)
     status = Column(Enum(ReportStatus), default=ReportStatus.pending, nullable=False)
     summary_text = Column(Text, nullable=True)
+    advisor_snapshot_json = Column(JSON, nullable=True)
     version_number = Column(Integer, default=1, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     completed_at = Column(DateTime, nullable=True)
