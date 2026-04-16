@@ -44,9 +44,26 @@ class StudentProfile(Base):
 
     # Test scores
     sat_score = Column(Integer, nullable=True)
+    sat_math = Column(Integer, nullable=True)
+    sat_ebrw = Column(Integer, nullable=True)
     act_score = Column(Integer, nullable=True)
     ielts_score = Column(String(10), nullable=True)  # e.g. "7.5"
+    ielts_listening = Column(String(10), nullable=True)
+    ielts_reading = Column(String(10), nullable=True)
+    ielts_writing = Column(String(10), nullable=True)
+    ielts_speaking = Column(String(10), nullable=True)
     toefl_score = Column(Integer, nullable=True)
+    toefl_reading = Column(Integer, nullable=True)
+    toefl_listening = Column(Integer, nullable=True)
+    toefl_speaking = Column(Integer, nullable=True)
+    toefl_writing = Column(Integer, nullable=True)
+    duolingo_score = Column(Integer, nullable=True)
+    a_level_subjects = Column(String(500), nullable=True)
+    a_level_predicted = Column(String(255), nullable=True)
+    ap_subjects = Column(String(500), nullable=True)
+    ib_predicted_score = Column(Integer, nullable=True)
+    unt_score = Column(Integer, nullable=True)
+    nis_grade12_certificate_gpa = Column(String(50), nullable=True)
 
     # Financial
     budget_range = Column(String(100), nullable=True)  # e.g. "50k-75k"

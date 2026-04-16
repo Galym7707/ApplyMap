@@ -80,10 +80,20 @@ export const achievementsApi = {
   create: (data: Record<string, unknown>) => api.post("/api/achievements", data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/api/achievements/${id}`, data),
   delete: (id: string) => api.delete(`/api/achievements/${id}`),
-  importAll: (file: File, wordLimit: number) => {
+  importAll: (
+    file: File,
+    wordLimit: number,
+    options?: { clarificationAnswers?: Record<string, string>; previousImportIds?: string[] }
+  ) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("word_limit", String(wordLimit));
+    if (options?.clarificationAnswers) {
+      formData.append("clarification_answers", JSON.stringify(options.clarificationAnswers));
+    }
+    if (options?.previousImportIds?.length) {
+      formData.append("previous_import_ids", JSON.stringify(options.previousImportIds));
+    }
     return api.post("/api/achievements/import-all", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
@@ -122,12 +132,14 @@ export const universitiesApi = {
     preferences: Record<string, unknown>;
     save_preferences?: boolean;
   }) => api.post("/api/universities/recommendations/common-app", data),
+  advisorPlan: (data: { university_name: string; intended_major?: string }) =>
+    api.post("/api/universities/advisor/plan", data),
 };
 
 // Targets
 export const targetsApi = {
   list: () => api.get("/api/targets"),
-  add: (data: { university_id: string; priority_order?: number }) =>
+  add: (data: { university_id: string; priority_order?: number; fit_category?: "dream" | "target" | "safe" }) =>
     api.post("/api/targets", data),
   remove: (id: string) => api.delete(`/api/targets/${id}`),
 };

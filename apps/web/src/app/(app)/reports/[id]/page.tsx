@@ -2,13 +2,34 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, FileSearch, GraduationCap, Loader2, ReceiptText, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  FileSearch,
+  GraduationCap,
+  Loader2,
+  ReceiptText,
+  Shield,
+  Sparkles,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { profileApi, reportsApi } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
-import type { ReportDetail, ReportStatus } from "@/types";
+import { toast } from "sonner";
+import type {
+  Recommendation,
+  ReportDetail,
+  ReportStatus,
+  RewriteVariant,
+  SourceReference,
+} from "@/types";
 
 const STATUS_STEPS = {
   pending: [
@@ -25,6 +46,20 @@ const STATUS_STEPS = {
   failed: [],
 } satisfies Record<ReportStatus, string[]>;
 
+const REC_TYPE_COLORS = {
+  keep: "success",
+  rewrite: "warning",
+  remove: "destructive",
+  merge: "info",
+  reorder: "secondary",
+} as const;
+
+const CONFIDENCE_COLORS = {
+  high: "bg-emerald-100 text-emerald-800",
+  medium: "bg-blue-100 text-blue-800",
+  low: "bg-slate-100 text-slate-600",
+};
+
 function StatusBadge({ status }: { status: ReportStatus }) {
   const variants = {
     completed: "success",
@@ -34,6 +69,191 @@ function StatusBadge({ status }: { status: ReportStatus }) {
   } as const;
 
   return <Badge variant={variants[status]}>{status}</Badge>;
+}
+
+function getRewriteFormat(report: ReportDetail, achievementType: string) {
+  const haystack = [report.university.name, report.university.country, report.university.application_system]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (haystack.includes("korea") || ["kaist", "unist", "postech", "yonsei"].some((token) => haystack.includes(token))) {
+    if (haystack.includes("kaist")) {
+      return { label: "KAIST Apply", limit: 200, unit: "English bytes/chars" };
+    }
+    return { label: "Korean university application", limit: 300, unit: "English bytes/chars" };
+  }
+
+  if (achievementType === "honor") {
+    return { label: "Common App honor", limit: 100, unit: "chars" };
+  }
+
+  return { label: "Common App activity", limit: 150, unit: "chars" };
+}
+
+function RewriteStudio({
+  report,
+  recommendation,
+  variants,
+}: {
+  report: ReportDetail;
+  recommendation: Recommendation;
+  variants: RewriteVariant[];
+}) {
+  const [selectedStyle, setSelectedStyle] = useState(
+    variants.find((v) => v.is_recommended)?.style_mode ?? variants[0]?.style_mode
+  );
+  const [expanded, setExpanded] = useState(false);
+
+  const myVariants = variants.filter((v) => v.achievement_id === recommendation.achievement_id);
+  if (myVariants.length === 0) return null;
+
+  const selected = myVariants.find((v) => v.style_mode === selectedStyle) ?? myVariants[0];
+  const rewriteFormat = getRewriteFormat(report, recommendation.achievement.type);
+
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <button
+        className="flex w-full items-center justify-between text-sm font-medium text-slate-700"
+        onClick={() => setExpanded((current) => !current)}
+      >
+        Rewrite Studio
+        {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+      </button>
+
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          <div className="flex gap-2">
+            {myVariants.map((variant) => (
+              <button
+                key={variant.style_mode}
+                onClick={() => setSelectedStyle(variant.style_mode)}
+                className={cn(
+                  "rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100",
+                  selectedStyle === variant.style_mode && "border-navy-950 bg-navy-950 text-white hover:bg-navy-900"
+                )}
+              >
+                {variant.style_mode.replace("_", " ")}
+                {variant.is_recommended && (
+                  <span className="ml-1 text-amber-500">{selectedStyle === variant.style_mode ? "best" : "recommended"}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-slate-500">Original</p>
+            <div className="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-700">
+              {recommendation.achievement.description_raw || (
+                <span className="italic text-slate-400">No description provided</span>
+              )}
+              <div className="mt-1 text-xs text-slate-400">
+                {(recommendation.achievement.description_raw?.length ?? 0)} chars
+              </div>
+            </div>
+          </div>
+
+          {selected && (
+            <div>
+              <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-slate-500">
+                {selected.style_mode.replace("_", " ")} style
+              </p>
+              <p className="mb-2 text-xs text-slate-500">Target: {rewriteFormat.label}</p>
+              <div className="rounded-md border border-navy-200 bg-navy-50 p-3 text-sm text-navy-900">
+                {selected.text}
+                <div className="mt-2 flex items-center justify-between text-xs">
+                  <span className={cn("font-medium", selected.character_count > rewriteFormat.limit ? "text-red-600" : "text-emerald-700")}>
+                    {selected.character_count}/{rewriteFormat.limit} {rewriteFormat.unit}
+                  </span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(selected.text);
+                      toast.success("Copied to clipboard");
+                    }}
+                    className="text-navy-700 hover:underline"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+              {selected.explanation && (
+                <p className="mt-1.5 text-xs text-slate-500">{selected.explanation}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SourceCard({ source }: { source: SourceReference }) {
+  const isOfficial = source.policy_entry.source_type === "official";
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border p-4",
+        isOfficial ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"
+      )}
+    >
+      <div className="mb-2 flex items-start gap-2.5">
+        {isOfficial ? (
+          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+        ) : (
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        )}
+        <div className="flex-1">
+          <div className="mb-0.5 flex flex-wrap items-center gap-2">
+            <span
+              className={cn(
+                "text-xs font-semibold",
+                isOfficial ? "text-emerald-800" : "text-amber-800"
+              )}
+            >
+              {isOfficial ? "Official" : "Public Example"} — Tier {source.policy_entry.reliability_tier}
+            </span>
+            {!isOfficial && (
+              <span className="text-xs text-amber-600">(not official university guidance)</span>
+            )}
+          </div>
+          <p
+            className={cn(
+              "text-sm font-medium",
+              isOfficial ? "text-emerald-900" : "text-amber-900"
+            )}
+          >
+            {source.policy_entry.title}
+          </p>
+          {source.policy_entry.source_title && (
+            <p className={cn("mt-0.5 text-xs", isOfficial ? "text-emerald-700" : "text-amber-700")}>
+              {source.policy_entry.source_title}
+            </p>
+          )}
+        </div>
+      </div>
+      {source.policy_entry.excerpt && (
+        <blockquote
+          className={cn(
+            "mt-2 border-l-2 pl-3 text-xs italic leading-relaxed",
+            isOfficial ? "border-emerald-300 text-emerald-800" : "border-amber-300 text-amber-800"
+          )}
+        >
+          &ldquo;{source.policy_entry.excerpt}&rdquo;
+        </blockquote>
+      )}
+      {source.policy_entry.source_url && (
+        <a
+          href={source.policy_entry.source_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn("mt-2 block text-xs hover:underline", isOfficial ? "text-emerald-700" : "text-amber-700")}
+        >
+          View source →
+        </a>
+      )}
+    </div>
+  );
 }
 
 function InfoCard({
@@ -57,6 +277,8 @@ function InfoCard({
 }
 
 export default function ReportDetailPage({ params }: { params: { id: string } }) {
+  const [isExporting, setIsExporting] = useState(false);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["reports", params.id],
     queryFn: () => reportsApi.get(params.id),
@@ -69,6 +291,25 @@ export default function ReportDetailPage({ params }: { params: { id: string } })
 
   const report: ReportDetail | undefined = data?.data?.data;
   const profile = profileData?.data?.data?.profile;
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const res = await reportsApi.export(params.id);
+      const blob = new Blob([JSON.stringify(res.data.data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `applymap-report-${params.id}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toast.success("Report exported");
+    } catch {
+      toast.error("Export failed");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -93,6 +334,16 @@ export default function ReportDetailPage({ params }: { params: { id: string } })
   const intendedMajor = advisor?.target_major || profile?.intended_major || report.university.major_strengths?.[0] || "your target major";
   const inProgress = report.status === "pending" || report.status === "processing";
   const isLegacyCompletedReport = report.status === "completed" && !advisor;
+  const keepRecs = report.recommendations
+    .filter((rec) => rec.recommendation_type === "keep" || rec.recommendation_type === "rewrite")
+    .sort((a, b) => (a.suggested_rank ?? 999) - (b.suggested_rank ?? 999));
+  const removeRecs = report.recommendations.filter(
+    (rec) => rec.recommendation_type === "remove" || rec.recommendation_type === "merge"
+  );
+  const activities = keepRecs.filter((rec) => rec.achievement.type === "activity");
+  const honors = keepRecs.filter((rec) => rec.achievement.type === "honor");
+  const officialSources = report.source_references.filter((source) => source.policy_entry.source_type === "official");
+  const publicSources = report.source_references.filter((source) => source.policy_entry.source_type === "public_example");
 
   return (
     <div className="relative overflow-hidden bg-[#f7f5ef] px-4 py-8 sm:px-6 lg:px-8">
@@ -133,6 +384,16 @@ export default function ReportDetailPage({ params }: { params: { id: string } })
                 </div>
                 <StatusBadge status={report.status} />
               </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleExport}
+                disabled={isExporting}
+                className="mt-3 w-full gap-1.5"
+              >
+                {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                Export
+              </Button>
               <p className="mt-3 text-xs leading-relaxed text-slate-500">
                 {advisor?.report_note ?? report.summary_text ?? "This view is intentionally university-first: school, major, funding route, and next moves."}
               </p>
@@ -161,9 +422,140 @@ export default function ReportDetailPage({ params }: { params: { id: string } })
         )}
 
         {isLegacyCompletedReport && (
-          <section className="mt-6 rounded-[32px] border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
-            This is a legacy report created before advisor snapshots were stored. Regenerate the advisor from the Universities page to lock a versioned university-specific snapshot.
-          </section>
+          <>
+            <section className="mt-6 rounded-[32px] border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
+              This is a legacy report created before advisor snapshots were stored. Regenerate the advisor from the Universities page to lock a versioned university-specific snapshot.
+            </section>
+
+            {honors.length > 0 && (
+              <section className="mt-6 rounded-[32px] border border-white/70 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur sm:p-8">
+                <h2 className="text-lg font-semibold text-slate-900">Recommended honors</h2>
+                <div className="mt-5 space-y-4">
+                  {honors.map((rec) => (
+                    <div key={rec.id} className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy-950 text-xs font-bold text-white">
+                          {rec.suggested_rank}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1 flex flex-wrap items-center gap-2">
+                            <h3 className="text-sm font-medium text-slate-900">{rec.achievement.title}</h3>
+                            <Badge variant={REC_TYPE_COLORS[rec.recommendation_type]}>{rec.recommendation_type}</Badge>
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
+                                CONFIDENCE_COLORS[rec.confidence_label]
+                              )}
+                            >
+                              {rec.confidence_label} confidence
+                            </span>
+                          </div>
+                          {rec.achievement.organization_name && (
+                            <p className="mb-2 text-xs text-slate-500">{rec.achievement.organization_name}</p>
+                          )}
+                          {rec.rationale && <p className="text-sm text-slate-600">{rec.rationale}</p>}
+                          <RewriteStudio report={report} recommendation={rec} variants={report.rewrite_variants} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {activities.length > 0 && (
+              <section className="mt-6 rounded-[32px] border border-white/70 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur sm:p-8">
+                <h2 className="text-lg font-semibold text-slate-900">Recommended activities</h2>
+                <div className="mt-5 space-y-4">
+                  {activities.map((rec) => (
+                    <div key={rec.id} className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy-950 text-xs font-bold text-white">
+                          {rec.suggested_rank}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1 flex flex-wrap items-center gap-2">
+                            <h3 className="text-sm font-medium text-slate-900">{rec.achievement.title}</h3>
+                            <Badge variant={REC_TYPE_COLORS[rec.recommendation_type]}>{rec.recommendation_type}</Badge>
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
+                                CONFIDENCE_COLORS[rec.confidence_label]
+                              )}
+                            >
+                              {rec.confidence_label} confidence
+                            </span>
+                          </div>
+                          {rec.achievement.organization_name && (
+                            <p className="mb-2 text-xs text-slate-500">{rec.achievement.organization_name}</p>
+                          )}
+                          {rec.rationale && <p className="text-sm text-slate-600">{rec.rationale}</p>}
+                          <RewriteStudio report={report} recommendation={rec} variants={report.rewrite_variants} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {removeRecs.length > 0 && (
+              <section className="mt-6 rounded-[32px] border border-white/70 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur sm:p-8">
+                <h2 className="text-lg font-semibold text-slate-900">Not recommended for this university</h2>
+                <div className="mt-5 space-y-2">
+                  {removeRecs.map((rec) => (
+                    <div
+                      key={rec.id}
+                      className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
+                    >
+                      <div>
+                        <p className="text-sm text-slate-600">{rec.achievement.title}</p>
+                        {rec.rationale && <p className="mt-0.5 text-xs text-slate-400">{rec.rationale}</p>}
+                      </div>
+                      <Badge variant={REC_TYPE_COLORS[rec.recommendation_type]}>{rec.recommendation_type}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {!!(officialSources.length || publicSources.length) && (
+              <section className="mt-6 rounded-[32px] border border-white/70 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur sm:p-8">
+                <h2 className="text-lg font-semibold text-slate-900">Guidance sources</h2>
+                <p className="mt-2 text-sm text-slate-500">Every legacy recommendation is grounded in these sources.</p>
+
+                {officialSources.length > 0 && (
+                  <div className="mt-5">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Official sources (Tier A)
+                    </h3>
+                    <div className="space-y-3">
+                      {officialSources.map((source) => (
+                        <SourceCard key={source.id} source={source} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {publicSources.length > 0 && (
+                  <div className="mt-5">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Public examples (Tier B/C)
+                    </h3>
+                    <div className="space-y-3">
+                      {publicSources.map((source) => (
+                        <SourceCard key={source.id} source={source} />
+                      ))}
+                    </div>
+                    <p className="mt-3 rounded-md border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                      Public example sources represent patterns observed in community discussions and admitted student profiles.
+                      They are not official university guidance. Always verify important decisions against official sources.
+                    </p>
+                  </div>
+                )}
+              </section>
+            )}
+          </>
         )}
 
         {!inProgress && report.status === "completed" && advisor && (

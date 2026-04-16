@@ -42,6 +42,7 @@ const COUNTRIES = ["", "United States", "United Arab Emirates", "Hong Kong", "So
 const REGIONS = ["", "USA", "Abu Dhabi / UAE", "Hong Kong", "Korea", "Japan", "Canada", "Europe"];
 const SORTS = [
   { value: "name", label: "Name" },
+  { value: "aid_type", label: "Need policy" },
   { value: "aid_strength", label: "Aid strength" },
   { value: "selectivity_score", label: "Selectivity" },
   { value: "education_years_required", label: "School years required" },
@@ -53,6 +54,12 @@ const ADVISOR_PROGRESS_STEPS = [
   "Preparing research-program guidance",
   "Opening advisor",
 ] as const;
+
+const FIT_CATEGORY_LABELS = {
+  dream: "Dream",
+  target: "Target",
+  safe: "Safe",
+} as const;
 
 function csvToArray(value: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
@@ -230,9 +237,15 @@ export default function UniversitiesPage() {
     target: recommendations.filter((item) => item.category === "target"),
     safe: recommendations.filter((item) => item.category === "safe"),
   }), [recommendations]);
+  const targetsByCategory = useMemo(() => ({
+    dream: targets.filter((item) => item.fit_category === "dream"),
+    target: targets.filter((item) => item.fit_category === "target"),
+    safe: targets.filter((item) => item.fit_category === "safe"),
+  }), [targets]);
 
   const addTargetMutation = useMutation({
-    mutationFn: (universityId: string) => targetsApi.add({ university_id: universityId }),
+    mutationFn: ({ universityId, fitCategory }: { universityId: string; fitCategory: "dream" | "target" | "safe" }) =>
+      targetsApi.add({ university_id: universityId, fit_category: fitCategory }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["targets"] });
       toast.success("University added to targets");
@@ -405,8 +418,47 @@ export default function UniversitiesPage() {
               <input type="checkbox" checked={filters.common_app_only} onChange={(event) => setFilters((current) => ({ ...current, common_app_only: event.target.checked }))} />
               Common App only
             </label>
+            <label className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm">
+              <input
+                type="checkbox"
+                checked={filters.teaching_language.toLowerCase() === "english"}
+                onChange={(event) => setFilters((current) => ({ ...current, teaching_language: event.target.checked ? "English" : "" }))}
+              />
+              English programs
+            </label>
           </div>
         </section>
+
+        {!!targets.length && (
+          <section className="mt-6 rounded-[32px] border border-white/70 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur sm:p-8">
+            <h2 className="text-lg font-semibold text-slate-900">Your university list</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              Keep your own Dream, Target, and Safe list separate from the AI suggestions.
+            </p>
+            <div className="mt-5 grid gap-4 lg:grid-cols-3">
+              {(["dream", "target", "safe"] as const).map((category) => (
+                <div key={category} className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-900">{FIT_CATEGORY_LABELS[category]}</h3>
+                    <Badge variant="outline">{targetsByCategory[category].length}</Badge>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {targetsByCategory[category].length ? targetsByCategory[category].map((target) => (
+                      <div key={target.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-sm font-medium text-slate-900">{target.university.name}</p>
+                        <p className="mt-1 text-xs text-slate-500">{target.university.country}</p>
+                      </div>
+                    )) : (
+                      <p className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
+                        No schools yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="mt-6 rounded-[32px] border border-white/70 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur sm:p-8">
           <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -509,6 +561,20 @@ export default function UniversitiesPage() {
                             {recommendation.aid_notes}
                           </p>
                         )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-4 w-full text-xs"
+                          disabled={targetUniversityIds.has(recommendation.university_id) || addTargetMutation.isPending}
+                          onClick={() => addTargetMutation.mutate({
+                            universityId: recommendation.university_id,
+                            fitCategory: recommendation.category,
+                          })}
+                        >
+                          {targetUniversityIds.has(recommendation.university_id)
+                            ? "Already in your list"
+                            : `Add as ${FIT_CATEGORY_LABELS[recommendation.category]}`}
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -576,10 +642,19 @@ export default function UniversitiesPage() {
 
                     <div className="flex gap-2">
                       {!isTarget ? (
-                        <Button size="sm" variant="outline" className="flex-1 gap-1.5 text-xs" onClick={() => addTargetMutation.mutate(university.id)} disabled={addTargetMutation.isPending}>
-                          <Plus className="h-3.5 w-3.5" />
-                          Add to targets
-                        </Button>
+                        (["dream", "target", "safe"] as const).map((category) => (
+                          <Button
+                            key={category}
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 gap-1 text-xs"
+                            onClick={() => addTargetMutation.mutate({ universityId: university.id, fitCategory: category })}
+                            disabled={addTargetMutation.isPending}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            {FIT_CATEGORY_LABELS[category]}
+                          </Button>
+                        ))
                       ) : (
                         <Button size="sm" className="flex-1 gap-1.5 bg-navy-950 text-xs text-white hover:bg-navy-900" onClick={() => handleGenerateReport(university)} disabled={isAnyAdvisorGenerating}>
                           {isGeneratingThisCard ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}

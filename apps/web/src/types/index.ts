@@ -14,9 +14,26 @@ export interface StudentProfile {
   curriculum?: string;
   intended_major?: string;
   sat_score?: number;
+  sat_math?: number;
+  sat_ebrw?: number;
   act_score?: number;
   ielts_score?: string;
+  ielts_listening?: string;
+  ielts_reading?: string;
+  ielts_writing?: string;
+  ielts_speaking?: string;
   toefl_score?: number;
+  toefl_reading?: number;
+  toefl_listening?: number;
+  toefl_speaking?: number;
+  toefl_writing?: number;
+  duolingo_score?: number;
+  a_level_subjects?: string;
+  a_level_predicted?: string;
+  ap_subjects?: string;
+  ib_predicted_score?: number;
+  unt_score?: number;
+  nis_grade12_certificate_gpa?: string;
   budget_range?: string;
   aid_needed?: boolean;
   application_preferences_json?: Record<string, unknown>;
@@ -76,7 +93,24 @@ export interface AchievementImportSelectionItem {
   common_app_text: string;
   word_count: number;
   character_count: number;
+  common_app_position?: string;
+  common_app_organization?: string;
+  common_app_activity_description?: string;
+  common_app_honor_description?: string;
+  position_character_count?: number;
+  organization_character_count?: number;
+  activity_description_character_count?: number;
+  honor_character_count?: number;
   selection_reason?: string;
+  verification_notes: string[];
+  missing_or_unclear_facts: string[];
+}
+
+export interface AchievementImportStep {
+  key: string;
+  label: string;
+  status: "pending" | "active" | "complete" | "error" | string;
+  detail: string;
 }
 
 export interface AchievementImportResult {
@@ -84,6 +118,15 @@ export interface AchievementImportResult {
   word_limit: number;
   imported_count: number;
   strongest_angle: string;
+  needs_student_clarification: boolean;
+  clarifying_questions: string[];
+  additional_information_recommended: boolean;
+  additional_information_reason?: string;
+  additional_information_draft?: string;
+  formatting_notes: string[];
+  extraction_notes: string[];
+  source_excerpts: string[];
+  processing_steps: AchievementImportStep[];
   imported_achievements: Achievement[];
   top_activities: AchievementImportSelectionItem[];
   top_honors: AchievementImportSelectionItem[];
@@ -154,8 +197,26 @@ export interface TargetUniversity {
   user_id: string;
   university_id: string;
   priority_order?: number;
+  fit_category: "dream" | "target" | "safe";
   created_at: string;
   university: University;
+}
+
+export interface UniversityAdvisorSource {
+  title: string;
+  url: string;
+  snippet: string;
+  query: string;
+  source_tier: "official" | "likely_official" | "education_domain" | "third_party";
+}
+
+export interface UniversityAdvisorPlan {
+  summary: string;
+  exams_to_prioritize: Array<{ exam: string; why: string; priority: "high" | "medium" | "low" }>;
+  profile_actions: string[];
+  low_value_activities: string[];
+  research_or_summer_programs: Array<{ name: string; why_it_helps: string; source_url?: string }>;
+  source_notes: string[];
 }
 
 export type ReportStatus = "pending" | "processing" | "completed" | "failed";

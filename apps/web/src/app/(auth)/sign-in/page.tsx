@@ -25,16 +25,18 @@ export default function SignInPage() {
     register,
     handleSubmit,
     formState: { errors },
+
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const onSubmit = (data: FormData) => {
     login({ email: data.email, password: data.password });
   };
 
-  const apiError =
-    loginError && "response" in (loginError as object)
-      ? ((loginError as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? "Invalid email or password")
-      : null;
+  const apiError = loginError
+    ? ("response" in (loginError as object)
+      ? ((loginError as any).response?.data?.detail ?? "Invalid email or password")
+      : (loginError as Error).message || "An unexpected network error occurred. Please try again.")
+    : null;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F9F8F6] px-5 py-12">

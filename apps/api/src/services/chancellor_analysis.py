@@ -4,6 +4,7 @@ from typing import Any, Optional
 import httpx
 
 from ..config import settings
+from .counselor_knowledge import CHANCELLOR_COUNSELOR_FRAMEWORK
 
 
 SCORE_KEYS = (
@@ -139,6 +140,7 @@ def _gemini_prompt(source: Any, user: Optional[Any]) -> str:
         "trilingual, Cambridge-aligned academic backgrounds. MESK in Russian/Kazakh user language maps to "
         "NIS Grade 12 Certificate in English output.\n\n"
         f"{ADMISSIONS_FRAMEWORK}\n\n"
+        f"{CHANCELLOR_COUNSELOR_FRAMEWORK}\n\n"
         "Score each field from 0 to 10, using one decimal place when useful:\n"
         "- major_relevance_score: fit with intended major, academic direction, and profile strategy.\n"
         "- selectivity_score: competitiveness, award level, and selection difficulty.\n"

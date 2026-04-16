@@ -13,6 +13,8 @@ import {
   LogOut,
   Settings,
   Check,
+  UserCircle,
+  Compass,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { ApplyMapLogo } from "@/components/brand/ApplyMapLogo";
@@ -27,6 +29,12 @@ const navItems = [
     tooltip: "Profile completeness, stats, and quick actions",
   },
   {
+    href: "/profile",
+    label: "Profile",
+    icon: UserCircle,
+    tooltip: "Review and edit your saved academic context",
+  },
+  {
     href: "/vault",
     label: "Achievement Vault",
     icon: BookOpen,
@@ -37,6 +45,12 @@ const navItems = [
     label: "Universities",
     icon: GraduationCap,
     tooltip: "Select target schools and generate optimization reports",
+  },
+  {
+    href: "/advisor",
+    label: "University Advisor",
+    icon: Compass,
+    tooltip: "Search official sources and get a target-school action plan",
   },
   {
     href: "/reports",
@@ -80,7 +94,7 @@ export function AppSidebar() {
     {
       label: "Profile",
       complete: !!(user?.full_name && user?.country),
-      href: "/onboarding",
+      href: "/profile",
     },
     {
       label: "Vault",
@@ -225,7 +239,7 @@ export function AppSidebar() {
         </div>
 
         {/* Settings */}
-        <Link href="/onboarding">
+        <Link href="/profile">
           <button className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-slate-500 transition-colors hover:bg-white hover:text-slate-700">
             <Settings className="h-4 w-4" />
             Settings

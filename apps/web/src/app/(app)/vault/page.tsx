@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { AllAchievementsPanel } from "@/components/vault/AllAchievementsPanel";
+import {
+  AllAchievementsPanel,
+  type ClarificationAnswers,
+  type ImportProgressState,
+} from "@/components/vault/AllAchievementsPanel";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -26,6 +30,7 @@ import type { Achievement, AchievementImportResult } from "@/types";
 
 const ACTIVITY_ORDER_STORAGE_KEY = "sourcelock_activity_order";
 const IMPORT_ANALYSIS_STORAGE_KEY = "applymap_all_import_analysis";
+const TEXT_PREVIEW_EXTENSIONS = new Set(["txt", "md", "csv", "json"]);
 
 // ─── Form schema ────────────────────────────────────────────────────────────
 
@@ -36,6 +41,8 @@ const achievementSchema = z.object({
   role_title: z.string().optional(),
   description_raw: z.string().optional(),
   category: z.string().optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
   hours_per_week: z.string().optional(),
   weeks_per_year: z.string().optional(),
   impact_scope: z
@@ -58,18 +65,59 @@ function hasChancellorScores(achievement: Achievement) {
   return SCORE_FIELDS.every((field) => typeof achievement[field.key] === "number");
 }
 
+function formatFileSize(bytes: number) {
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+async function getLocalSourcePreview(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (!TEXT_PREVIEW_EXTENSIONS.has(extension)) return [];
+
+  const text = await file.text();
+  return text
+    .split(/\r?\n|[\u2022*]\s+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length > 18)
+    .slice(0, 5)
+    .map((line) => (line.length > 220 ? `${line.slice(0, 217)}...` : line));
+}
+
 function getStatus(achievement: Achievement) {
   const desc = achievement.description_raw ?? "";
   if (achievement.truth_risk_flag) {
-    return { label: "Review Needed", variant: "destructive" as const, icon: AlertTriangle };
+    return {
+      label: "Review Needed",
+      variant: "destructive" as const,
+      icon: AlertTriangle,
+      reason:
+        "The Chancellor found an unsupported, conflicting, or unclear claim. Add evidence or clarify dates, award level, scope, hours, or results.",
+    };
   }
   if (desc.length < 30) {
-    return { label: "Needs Detail", variant: "warning" as const, icon: Info };
+    return {
+      label: "Needs Detail",
+      variant: "warning" as const,
+      icon: Info,
+      reason: "The description is too short to judge impact. Add what you did, scale, outcome, and time commitment.",
+    };
   }
   if (!hasChancellorScores(achievement)) {
-    return { label: "Analysis Pending", variant: "info" as const, icon: Sparkles };
+    return {
+      label: "Analysis Pending",
+      variant: "info" as const,
+      icon: Sparkles,
+      reason: "The Chancellor has not scored this achievement yet.",
+    };
   }
-  return { label: "Strong", variant: "success" as const, icon: CheckCircle };
+  return {
+    label: "Strong",
+    variant: "success" as const,
+    icon: CheckCircle,
+    reason: "The entry has enough detail for the current Chancellor scoring pass.",
+  };
 }
 
 // ─── Score bar ───────────────────────────────────────────────────────────────
@@ -174,6 +222,8 @@ function AchievementModal({
           ...editing,
           hours_per_week: editing.hours_per_week?.toString() ?? "",
           weeks_per_year: editing.weeks_per_year?.toString() ?? "",
+          start_date: editing.start_date ?? "",
+          end_date: editing.end_date ?? "",
           impact_scope: editing.impact_scope ?? "",
           leadership_level: editing.leadership_level ?? "",
         }
@@ -187,6 +237,8 @@ function AchievementModal({
             ...editing,
             hours_per_week: editing.hours_per_week?.toString() ?? "",
             weeks_per_year: editing.weeks_per_year?.toString() ?? "",
+            start_date: editing.start_date ?? "",
+            end_date: editing.end_date ?? "",
             impact_scope: editing.impact_scope ?? "",
             leadership_level: editing.leadership_level ?? "",
           }
@@ -220,6 +272,8 @@ function AchievementModal({
       ...raw,
       hours_per_week: raw.hours_per_week ? parseFloat(raw.hours_per_week) : undefined,
       weeks_per_year: raw.weeks_per_year ? parseInt(raw.weeks_per_year, 10) : undefined,
+      start_date: raw.start_date || undefined,
+      end_date: raw.end_date || undefined,
       impact_scope: raw.impact_scope || undefined,
       leadership_level: raw.leadership_level || undefined,
     };
@@ -268,10 +322,18 @@ function AchievementModal({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
             <div className="space-y-1.5">
               <Label>Category</Label>
               <Input placeholder="Science / Arts / Service" {...register("category")} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Start date</Label>
+              <Input type="date" {...register("start_date")} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>End date</Label>
+              <Input type="date" {...register("end_date")} />
             </div>
             <div className="space-y-1.5">
               <Label>Hrs/week</Label>
@@ -407,10 +469,19 @@ function AchievementCard({
         <div className="flex-1 min-w-0">
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <h3 className="truncate text-sm font-medium text-slate-900">{achievement.title}</h3>
-            <Badge variant={status.variant} className="flex items-center gap-1 text-xs">
-              <StatusIcon className="h-3 w-3" />
-              {status.label}
-            </Badge>
+            <span className="group/status relative inline-flex">
+              <Badge
+                variant={status.variant}
+                className="flex cursor-help items-center gap-1 text-xs"
+                tabIndex={0}
+              >
+                <StatusIcon className="h-3 w-3" />
+                {status.label}
+              </Badge>
+              <span className="pointer-events-none absolute left-0 top-full z-30 mt-2 w-72 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-700 opacity-0 shadow-lg transition-opacity group-hover/status:opacity-100 group-focus-within/status:opacity-100">
+                {status.reason}
+              </span>
+            </span>
           </div>
 
           {achievement.organization_name && (
@@ -476,6 +547,9 @@ export default function VaultPage() {
   const [defaultType, setDefaultType] = useState<"activity" | "honor">("activity");
   const [wordLimit, setWordLimit] = useState("22");
   const [allImportResult, setAllImportResult] = useState<AchievementImportResult | null>(null);
+  const [importProgress, setImportProgress] = useState<ImportProgressState | null>(null);
+  const [lastImportFile, setLastImportFile] = useState<File | null>(null);
+  const [clarificationAnswers, setClarificationAnswers] = useState<ClarificationAnswers>({});
 
   // Drag state
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -494,6 +568,9 @@ export default function VaultPage() {
 
   const clearImportAnalysis = () => {
     setAllImportResult(null);
+    setImportProgress(null);
+    setLastImportFile(null);
+    setClarificationAnswers({});
     try {
       localStorage.removeItem(IMPORT_ANALYSIS_STORAGE_KEY);
     } catch {}
@@ -509,10 +586,27 @@ export default function VaultPage() {
   });
 
   const importMutation = useMutation({
-    mutationFn: ({ file, limit }: { file: File; limit: number }) => achievementsApi.importAll(file, limit),
+    mutationFn: ({
+      file,
+      limit,
+      answers,
+      previousImportIds,
+    }: {
+      file: File;
+      limit: number;
+      answers?: ClarificationAnswers;
+      previousImportIds?: string[];
+    }) =>
+      achievementsApi.importAll(file, limit, {
+        clarificationAnswers: answers,
+        previousImportIds,
+      }),
     onSuccess: (response) => {
       const result = response.data.data as AchievementImportResult;
       setAllImportResult(result);
+      setImportProgress((current) =>
+        current ? { ...current, currentStepIndex: 5 } : current
+      );
 
       try {
         localStorage.setItem(IMPORT_ANALYSIS_STORAGE_KEY, JSON.stringify(result));
@@ -531,6 +625,9 @@ export default function VaultPage() {
       toast.success(`Imported ${result.imported_count} achievements and built a shortlist`);
     },
     onError: (error: unknown) => {
+      setImportProgress((current) =>
+        current ? { ...current, currentStepIndex: 3 } : current
+      );
       const detail =
         typeof error === "object" &&
         error &&
@@ -541,6 +638,22 @@ export default function VaultPage() {
       toast.error(detail);
     },
   });
+
+  useEffect(() => {
+    if (!importMutation.isPending) return;
+
+    const interval = window.setInterval(() => {
+      setImportProgress((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          currentStepIndex: Math.min(current.currentStepIndex + 1, 4),
+        };
+      });
+    }, 1800);
+
+    return () => window.clearInterval(interval);
+  }, [importMutation.isPending]);
 
   // Load order from localStorage
   useEffect(() => {
@@ -623,7 +736,14 @@ export default function VaultPage() {
     fileInputRef.current?.click();
   };
 
-  const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const trimmedClarificationAnswers = (): ClarificationAnswers =>
+    Object.fromEntries(
+      Object.entries(clarificationAnswers)
+        .map(([key, value]) => [key, value.trim()])
+        .filter(([, value]) => value.length > 0)
+    );
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
@@ -634,7 +754,59 @@ export default function VaultPage() {
       return;
     }
 
+    const sourcePreview = await getLocalSourcePreview(file).catch(() => []);
+    setLastImportFile(file);
+    setClarificationAnswers({});
+    setAllImportResult(null);
+    setImportProgress({
+      fileName: file.name,
+      fileSizeLabel: formatFileSize(file.size),
+      currentStepIndex: 0,
+      sourcePreview,
+    });
+
     importMutation.mutate({ file, limit: parsedLimit });
+  };
+
+  const handleClarificationAnswerChange = (key: string, value: string) => {
+    setClarificationAnswers((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  };
+
+  const handleReanalyze = () => {
+    if (!lastImportFile) {
+      toast.error("Upload the original file again before reanalysis.");
+      return;
+    }
+
+    const parsedLimit = Number(wordLimit);
+    if (!Number.isFinite(parsedLimit) || parsedLimit < 5 || parsedLimit > 40) {
+      toast.error("Set a word limit between 5 and 40.");
+      return;
+    }
+
+    const answers = trimmedClarificationAnswers();
+    if (Object.keys(answers).length === 0) {
+      toast.error("Answer at least one missing detail before reanalysis.");
+      return;
+    }
+
+    setAllImportResult(null);
+    setImportProgress({
+      fileName: lastImportFile.name,
+      fileSizeLabel: formatFileSize(lastImportFile.size),
+      currentStepIndex: 0,
+      sourcePreview: importProgress?.sourcePreview ?? [],
+    });
+
+    importMutation.mutate({
+      file: lastImportFile,
+      limit: parsedLimit,
+      answers,
+      previousImportIds: allImportResult?.imported_achievements.map((achievement) => achievement.id) ?? [],
+    });
   };
 
   return (
@@ -652,7 +824,7 @@ export default function VaultPage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json"
+          accept=".txt,.md,.csv,.json,.pdf,.docx,text/plain,text/markdown,text/csv,application/json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           className="hidden"
           onChange={handleImportFile}
         />
@@ -704,8 +876,13 @@ export default function VaultPage() {
             wordLimit={wordLimit}
             onWordLimitChange={setWordLimit}
             onUploadClick={handleImportClick}
+            onReanalyze={handleReanalyze}
             onClear={clearImportAnalysis}
             isImporting={importMutation.isPending}
+            importProgress={importProgress}
+            clarificationAnswers={clarificationAnswers}
+            onClarificationAnswerChange={handleClarificationAnswerChange}
+            canReanalyze={!!lastImportFile}
             achievementCount={achievements.length}
             activityCount={activities.length}
             honorCount={honors.length}

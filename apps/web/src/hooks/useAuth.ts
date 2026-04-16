@@ -16,7 +16,7 @@ export function useAuth() {
         return null;
       }
       try {
-        if (typeof window !== "undefined" && !localStorage.getItem("sourcelock_token")) {
+        if (typeof window !== "undefined" && !getStoredAuthToken()) {
           return null;
         }
         const res = await authApi.me();

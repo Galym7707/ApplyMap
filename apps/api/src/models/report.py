@@ -42,6 +42,7 @@ class TargetUniversity(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     university_id = Column(UUID(as_uuid=True), ForeignKey("universities.id", ondelete="CASCADE"), nullable=False)
     priority_order = Column(Integer, nullable=True)
+    fit_category = Column(String(20), default="target", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
