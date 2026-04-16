@@ -218,22 +218,60 @@ def _clamp_score(value: Any) -> float:
         return 5.0
 
 
+def _extract_pdf_text(raw_bytes: bytes) -> str:
+    import io
+
+    try:
+        import pdfplumber
+    except ImportError:
+        raise ValueError("PDF support requires pdfplumber. Run: pip install pdfplumber")
+
+    pages_text: list[str] = []
+    with pdfplumber.open(io.BytesIO(raw_bytes)) as pdf:
+        for page in pdf.pages:
+            page_text = page.extract_text() or ""
+            if page_text.strip():
+                pages_text.append(page_text)
+    return "\n".join(pages_text)
+
+
+def _extract_docx_text(raw_bytes: bytes) -> str:
+    import io
+
+    try:
+        from docx import Document
+    except ImportError:
+        raise ValueError("DOCX support requires python-docx. Run: pip install python-docx")
+
+    doc = Document(io.BytesIO(raw_bytes))
+    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+    return "\n".join(paragraphs)
+
+
 def decode_import_file(file_name: str, raw_bytes: bytes) -> str:
     if len(raw_bytes) > MAX_IMPORT_BYTES:
         raise ValueError("File is too large for MVP bulk import. Keep it under 200 KB.")
 
     extension = os.path.splitext(file_name or "")[1].lower()
-    if extension and extension not in {".txt", ".md", ".csv", ".json"}:
-        raise ValueError("MVP import currently supports .txt, .md, .csv, and .json files.")
+    supported = {".txt", ".md", ".csv", ".json", ".pdf", ".docx"}
+    if extension and extension not in supported:
+        raise ValueError(
+            "Import supports .txt, .md, .csv, .json, .pdf, and .docx files."
+        )
 
-    for encoding in ("utf-8", "utf-8-sig", "utf-16", "cp1251", "latin-1"):
-        try:
-            text = raw_bytes.decode(encoding)
-            break
-        except UnicodeDecodeError:
-            continue
+    if extension == ".pdf":
+        text = _extract_pdf_text(raw_bytes)
+    elif extension == ".docx":
+        text = _extract_docx_text(raw_bytes)
     else:
-        raise ValueError("Could not read the uploaded file as text.")
+        for encoding in ("utf-8", "utf-8-sig", "utf-16", "cp1251", "latin-1"):
+            try:
+                text = raw_bytes.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            raise ValueError("Could not read the uploaded file as text.")
 
     text = _compact_whitespace(text).strip()
     if not text:
