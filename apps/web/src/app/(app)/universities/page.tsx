@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { achievementsApi, profileApi, reportsApi, targetsApi, universitiesApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,13 @@ const SORTS = [
   { value: "selectivity_score", label: "Selectivity" },
   { value: "education_years_required", label: "School years required" },
 ];
+
+const ADVISOR_PROGRESS_STEPS = [
+  "Loading university profile",
+  "Matching major and funding route",
+  "Preparing research-program guidance",
+  "Opening advisor",
+] as const;
 
 const FIT_CATEGORY_LABELS = {
   dream: "Dream",
@@ -140,6 +147,10 @@ export default function UniversitiesPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [advisorTargetName, setAdvisorTargetName] = useState<string | null>(null);
+  const [advisorProgressIndex, setAdvisorProgressIndex] = useState(0);
+  const advisorGenerationLockedRef = useRef(false);
+  const advisorGenerationRequestRef = useRef(0);
   const [recommendations, setRecommendations] = useState<CommonAppRecommendation[]>([]);
   const [selectedHonorIds, setSelectedHonorIds] = useState<string[]>([]);
   const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
@@ -198,6 +209,7 @@ export default function UniversitiesPage() {
   const universities: University[] = universitiesData?.data?.data ?? [];
   const targets: TargetUniversity[] = targetsData?.data?.data ?? [];
   const targetUniversityIds = new Set(targets.map((target) => target.university_id));
+  const isAnyAdvisorGenerating = generatingId !== null;
 
   useEffect(() => {
     if (!profile || loadedSavedPrefs) return;
@@ -266,17 +278,36 @@ export default function UniversitiesPage() {
   });
 
   const handleGenerateReport = async (university: University) => {
+    if (advisorGenerationLockedRef.current) return;
+
+    advisorGenerationLockedRef.current = true;
+    const requestId = advisorGenerationRequestRef.current + 1;
+    advisorGenerationRequestRef.current = requestId;
     setGeneratingId(university.id);
+    setAdvisorTargetName(university.name);
+    setAdvisorProgressIndex(0);
+    const interval = window.setInterval(() => {
+      setAdvisorProgressIndex((current) =>
+        current >= ADVISOR_PROGRESS_STEPS.length - 1 ? current : current + 1
+      );
+    }, 950);
+
     try {
       const res = await reportsApi.generate(university.id);
       const reportId = res.data?.data?.id;
       queryClient.invalidateQueries({ queryKey: ["reports"] });
-      toast.success("Report generated");
+      toast.success("University advisor ready");
       router.push(reportId ? `/reports/${reportId}` : "/reports");
     } catch {
-      toast.error("Failed to generate report. Make sure you have achievements in your vault.");
+      toast.error("Failed to build the university advisor.");
     } finally {
-      setGeneratingId(null);
+      window.clearInterval(interval);
+      if (advisorGenerationRequestRef.current === requestId) {
+        setGeneratingId(null);
+        setAdvisorTargetName(null);
+        setAdvisorProgressIndex(0);
+      }
+      advisorGenerationLockedRef.current = false;
     }
   };
 
@@ -318,7 +349,7 @@ export default function UniversitiesPage() {
               </h1>
               <p className="mt-3 text-sm leading-relaxed text-slate-500">
                 Filter funded options, preserve your preferences, generate a Common App shortlist,
-                then move the best targets into source-backed optimization reports.
+                then open a university advisor focused on the school, your major, and the funding path.
               </p>
             </div>
 
@@ -563,7 +594,7 @@ export default function UniversitiesPage() {
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {universities.map((university) => {
                 const isTarget = targetUniversityIds.has(university.id);
-                const isGenerating = generatingId === university.id;
+                const isGeneratingThisCard = generatingId === university.id;
 
                 return (
                   <div
@@ -625,9 +656,9 @@ export default function UniversitiesPage() {
                           </Button>
                         ))
                       ) : (
-                        <Button size="sm" className="flex-1 gap-1.5 bg-navy-950 text-xs text-white hover:bg-navy-900" onClick={() => handleGenerateReport(university)} disabled={isGenerating}>
-                          {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-                          {isGenerating ? "Generating..." : "Generate Report"}
+                        <Button size="sm" className="flex-1 gap-1.5 bg-navy-950 text-xs text-white hover:bg-navy-900" onClick={() => handleGenerateReport(university)} disabled={isAnyAdvisorGenerating}>
+                          {isGeneratingThisCard ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                          {isGeneratingThisCard ? "Building advisor..." : "Open advisor"}
                         </Button>
                       )}
                     </div>
@@ -641,6 +672,44 @@ export default function UniversitiesPage() {
             </div>
           )}
         </section>
+
+        {generatingId && advisorTargetName && (
+          <div className="pointer-events-none fixed bottom-6 right-6 z-50 w-[360px] rounded-[28px] border border-white/70 bg-slate-950/96 p-5 text-white shadow-[0_24px_80px_rgba(15,23,42,0.35)] backdrop-blur">
+            <div className="flex items-start gap-3">
+              <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-emerald-300" />
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/50">
+                  University advisor
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-white">{advisorTargetName}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-white/70">
+                  The app now shows exactly what it is doing while the advisor is being prepared.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-2">
+              {ADVISOR_PROGRESS_STEPS.map((step, index) => {
+                const isDone = index < advisorProgressIndex;
+                const isCurrent = index === advisorProgressIndex;
+
+                return (
+                  <div
+                    key={step}
+                    className={cn(
+                      "rounded-2xl border px-4 py-3 text-sm transition",
+                      isCurrent && "border-emerald-300/60 bg-emerald-400/10 text-white",
+                      isDone && "border-white/10 bg-white/10 text-white/75",
+                      !isDone && !isCurrent && "border-white/10 bg-white/[0.04] text-white/45"
+                    )}
+                  >
+                    <span className="font-medium">{step}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -9,10 +9,12 @@ from uuid import UUID
 
 from ..models.achievement import Achievement, AchievementType, ImpactScope, LeadershipLevel
 from ..models.university import University, WeightPreset
+from ..models.user import StudentProfile
 from ..models.report import (
     OptimizationReport, ReportRecommendation, SourceReference,
     RecommendationType, ConfidenceLabel, SourceSection, ReportStatus
 )
+from .report_advisor import build_report_advisor_snapshot
 
 
 # Weight configurations per preset
@@ -268,6 +270,8 @@ def run_optimization(
     report: OptimizationReport,
     achievements: List[Achievement],
     university: University,
+    profile: StudentProfile | None = None,
+    user_country: str | None = None,
 ) -> None:
     """
     Run the full optimization pipeline and populate the report with recommendations.
@@ -382,13 +386,33 @@ def run_optimization(
         db.add(source_ref)
 
     # Build summary text
-    kept_acts = sum(1 for r in recommendations if r.recommendation_type == RecommendationType.keep and r.achievement_id in {a.achievement.id for a in scored_activities})
-    kept_honors = sum(1 for r in recommendations if r.recommendation_type == RecommendationType.keep and r.achievement_id in {a.achievement.id for a in scored_honors})
+    target_major = (
+        profile.intended_major if profile and profile.intended_major else None
+    ) or (university.major_strengths[0] if university.major_strengths else None) or "your target major"
+    weight_label = getattr(university.weight_preset, "value", university.weight_preset).replace("_", " ")
+    weight_emphasis = ", ".join(
+        key.replace("_", " ")
+        for key, value in weights.items()
+        if isinstance(value, float) and value >= 0.20 and key != "duplication_penalty"
+    )
+    funding_note = (
+        "A full-funding route is visible in the current dataset."
+        if university.full_ride_possible
+        else "Funding still needs careful verification before this school stays in the core list."
+    )
 
     report.summary_text = (
-        f"Optimization complete for {university.name} ({university.weight_preset.replace('_', ' ')} profile). "
-        f"Recommended: {kept_acts} activities and {kept_honors} honors. "
-        f"Weight emphasis: {', '.join(k for k, v in weights.items() if isinstance(v, float) and v >= 0.20 and k != 'duplication_penalty')}."
+        f"Advisor ready for {university.name} v{report.version_number}. "
+        f"Focus major: {target_major}. "
+        f"University profile: {weight_label}. "
+        f"Weight emphasis: {weight_emphasis}. "
+        f"{funding_note}"
+    )
+    report.advisor_snapshot_json = build_report_advisor_snapshot(
+        university=university,
+        profile=profile,
+        user_country=user_country,
+        report_note=report.summary_text,
     )
     report.status = ReportStatus.completed
     report.completed_at = __import__("datetime").datetime.utcnow()

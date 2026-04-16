@@ -65,12 +65,36 @@ class SourceReferenceOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AdvisorProgramOut(BaseModel):
+    name: str
+    why_it_matters: str
+    funding_note: str
+    priority: str
+
+
+class AdvisorActionOut(BaseModel):
+    title: str
+    detail: str
+
+
+class AdvisorSnapshotOut(BaseModel):
+    title: str
+    subtitle: str
+    target_major: str
+    report_note: str
+    focus_areas: List[str] = []
+    research_programs: List[AdvisorProgramOut] = []
+    funding_plan: List[str] = []
+    action_plan: List[AdvisorActionOut] = []
+
+
 class ReportOut(BaseModel):
     id: UUID
     user_id: UUID
     university_id: UUID
     status: ReportStatus
     summary_text: Optional[str] = None
+    advisor_snapshot_json: Optional[AdvisorSnapshotOut] = None
     version_number: int
     created_at: datetime
     completed_at: Optional[datetime] = None

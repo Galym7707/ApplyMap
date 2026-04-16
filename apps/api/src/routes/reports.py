@@ -11,6 +11,7 @@ from ..models.report import (
 )
 from ..models.achievement import Achievement
 from ..models.university import University
+from ..models.user import User, StudentProfile
 from ..routes.auth import get_current_user
 from ..services.optimization_engine import run_optimization
 from ..services.rewrite_service import generate_rewrite_variants
@@ -100,9 +101,18 @@ def _run_report_generation(db: Session, report_id: UUID):
         db.commit()
 
         university = db.query(University).filter(University.id == report.university_id).first()
+        user = db.query(User).filter(User.id == report.user_id).first()
+        profile = db.query(StudentProfile).filter(StudentProfile.user_id == report.user_id).first()
         achievements = db.query(Achievement).filter(Achievement.user_id == report.user_id).all()
 
-        run_optimization(db, report, achievements, university)
+        run_optimization(
+            db,
+            report,
+            achievements,
+            university,
+            profile=profile,
+            user_country=user.country if user else None,
+        )
 
         # Generate rewrite variants for top kept recommendations
         from ..models.report import ReportRecommendation, RecommendationType

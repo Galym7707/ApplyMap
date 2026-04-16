@@ -7,6 +7,7 @@ def ensure_application_schema() -> None:
     inspector = inspect(engine)
     student_profile_columns = {column["name"] for column in inspector.get_columns("student_profiles")}
     university_columns = {column["name"] for column in inspector.get_columns("universities")}
+    report_columns = {column["name"] for column in inspector.get_columns("optimization_reports")}
     target_university_columns = {column["name"] for column in inspector.get_columns("target_universities")}
 
     if "application_preferences_json" not in student_profile_columns:
@@ -75,6 +76,12 @@ def ensure_application_schema() -> None:
         with engine.begin() as connection:
             for name, column_type in missing_university_columns:
                 connection.execute(text(f"ALTER TABLE universities ADD COLUMN {name} {column_type}"))
+
+    if "advisor_snapshot_json" not in report_columns:
+        with engine.begin() as connection:
+            connection.execute(
+                text(f"ALTER TABLE optimization_reports ADD COLUMN advisor_snapshot_json {json_type}")
+            )
 
     if "fit_category" not in target_university_columns:
         with engine.begin() as connection:
