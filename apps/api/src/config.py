@@ -1,5 +1,10 @@
 from pydantic_settings import BaseSettings
 from typing import List
+from pathlib import Path
+
+
+API_DIR = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
@@ -23,7 +28,7 @@ class Settings(BaseSettings):
     AWS_REGION: str = "us-east-1"
 
     class Config:
-        env_file = ".env"
+        env_file = (REPO_ROOT / ".env", API_DIR / ".env")
         extra = "ignore"
 
 

@@ -154,13 +154,13 @@ def university_advisor_plan(
     except SearchNotConfiguredError:
         search_results = []
         search_warning = (
-            "Google Custom Search is not configured. Set GOOGLE_SEARCH_API_KEY and "
-            "GOOGLE_SEARCH_ENGINE_ID to enable source-backed live search."
+            "Live web search is not configured. Set either GOOGLE_SEARCH_API_KEY with "
+            "GOOGLE_SEARCH_ENGINE_ID or GEMINI_API_KEY to enable source-backed search."
         )
     except Exception:
         search_results = []
         search_warning = (
-            "Google Custom Search is currently unavailable or misconfigured. The plan below is limited "
+            "Live web search is currently unavailable or misconfigured. The plan below is limited "
             "to saved profile data and cannot confirm current university facts."
         )
 

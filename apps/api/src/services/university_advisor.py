@@ -1,4 +1,6 @@
 import json
+import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from urllib.parse import urlparse
 
@@ -65,6 +67,10 @@ class SearchNotConfiguredError(RuntimeError):
     pass
 
 
+def _compact(value: str) -> str:
+    return re.sub(r"\s+", " ", value or "").strip()
+
+
 def _google_search(query: str, *, num: int = 5) -> list[dict[str, str]]:
     api_key = settings.GOOGLE_SEARCH_API_KEY.strip()
     engine_id = settings.GOOGLE_SEARCH_ENGINE_ID.strip()
@@ -97,14 +103,120 @@ def _google_search(query: str, *, num: int = 5) -> list[dict[str, str]]:
     ]
 
 
-def _source_tier(url: str, university_name: str) -> str:
+def _resolve_redirect_url(url: str) -> str:
+    if not url:
+        return ""
     host = urlparse(url).netloc.lower()
+    if "vertexaisearch.cloud.google.com" not in host:
+        return url
+
+    try:
+        with httpx.Client(timeout=8.0, follow_redirects=True) as client:
+            response = client.head(url)
+            if response.status_code >= 400 or str(response.url) == url:
+                response = client.get(url)
+            return str(response.url)
+    except httpx.HTTPError:
+        return url
+
+
+def _gemini_grounded_search(query: str, *, num: int = 5) -> list[dict[str, str]]:
+    api_key = settings.GEMINI_API_KEY.strip()
+    if not api_key:
+        raise SearchNotConfiguredError("Gemini Search grounding is not configured")
+
+    model = (settings.GEMINI_MODEL or "gemini-2.5-flash").strip()
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    request_payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": (
+                            "Find current official source pages for this university admissions query. "
+                            "Prefer official university admissions, financial aid, program, and summer/research pages. "
+                            "Return a concise source-backed answer.\n\n"
+                            f"Query: {query}"
+                        )
+                    }
+                ]
+            }
+        ],
+        "tools": [{"google_search": {}}],
+        "generationConfig": {"temperature": 0.0},
+    }
+
+    with httpx.Client(timeout=30.0) as client:
+        response = client.post(
+            url,
+            headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+            json=request_payload,
+        )
+        response.raise_for_status()
+
+    payload = response.json()
+    candidates = payload.get("candidates") or []
+    candidate = candidates[0] if candidates else {}
+    parts = (candidate.get("content") or {}).get("parts") or []
+    answer_text = _compact(str(parts[0].get("text") or "")) if parts else ""
+    chunks = (candidate.get("groundingMetadata") or {}).get("groundingChunks") or []
+
+    raw_results: list[tuple[str, str]] = []
+    for chunk in chunks:
+        web = chunk.get("web") or {}
+        raw_url = str(web.get("uri") or "")
+        raw_title = _compact(str(web.get("title") or ""))
+        if raw_url:
+            raw_results.append((raw_title, raw_url))
+        if len(raw_results) >= num:
+            break
+
+    if not raw_results:
+        return []
+
+    with ThreadPoolExecutor(max_workers=min(6, len(raw_results))) as executor:
+        resolved_urls = list(executor.map(_resolve_redirect_url, [item[1] for item in raw_results]))
+
+    results: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for (raw_title, _), resolved_url in zip(raw_results, resolved_urls):
+        if not resolved_url or resolved_url in seen:
+            continue
+        seen.add(resolved_url)
+        results.append(
+            {
+                "title": raw_title or urlparse(resolved_url).netloc,
+                "url": resolved_url,
+                "snippet": answer_text[:320],
+            }
+        )
+    return results
+
+
+def _search_web(query: str, *, num: int = 5) -> list[dict[str, str]]:
+    google_error: Exception | None = None
+    try:
+        google_results = _google_search(query, num=num)
+        if google_results:
+            return google_results
+    except (SearchNotConfiguredError, httpx.HTTPError) as exc:
+        google_error = exc
+
+    try:
+        return _gemini_grounded_search(query, num=num)
+    except (SearchNotConfiguredError, httpx.HTTPError):
+        if isinstance(google_error, SearchNotConfiguredError):
+            raise google_error
+        return []
+
+
+def _source_tier(url: str, university_name: str, title: str = "") -> str:
+    host = urlparse(url).netloc.lower()
+    source_text = f"{host} {title}".lower()
     name_tokens = [token for token in university_name.lower().replace("-", " ").split() if len(token) > 3]
-    has_name_token = any(token in host for token in name_tokens)
+    has_name_token = any(token in source_text for token in name_tokens)
     if has_name_token and (".edu" in host or ".ac." in host or host.endswith(".edu")):
         return "official"
-    if has_name_token:
-        return "likely_official"
     if ".edu" in host or ".ac." in host:
         return "education_domain"
     return "third_party"
@@ -113,6 +225,10 @@ def _source_tier(url: str, university_name: str) -> str:
 def search_university_sources(university_name: str, intended_major: str | None = None) -> list[dict[str, str]]:
     major = intended_major or "undergraduate"
     queries = [
+        (
+            f"{university_name} official undergraduate admissions international students requirements "
+            f"scholarships financial aid research summer programs {major}"
+        ),
         f"{university_name} official undergraduate admissions international students requirements",
         f"{university_name} official scholarships financial aid international students",
         f"{university_name} official English taught programs {major}",
@@ -121,8 +237,9 @@ def search_university_sources(university_name: str, intended_major: str | None =
 
     seen: set[str] = set()
     results: list[dict[str, str]] = []
-    for query in queries:
-        for item in _google_search(query, num=5):
+    for query_index, query in enumerate(queries):
+        request_count = 8 if query_index == 0 else 5
+        for item in _search_web(query, num=request_count):
             url = item["url"]
             if url in seen:
                 continue
@@ -131,12 +248,36 @@ def search_university_sources(university_name: str, intended_major: str | None =
                 {
                     **item,
                     "query": query,
-                    "source_tier": _source_tier(url, university_name),
+                    "source_tier": _source_tier(url, university_name, item.get("title", "")),
                 }
             )
-            if len(results) >= 12:
-                return results
-    return results
+            official_count = len(
+                [
+                    result
+                    for result in results
+                    if result["source_tier"] == "official"
+                ]
+            )
+            if len(results) >= 18 or official_count >= 6:
+                break
+        official_count = len(
+            [
+                result
+                for result in results
+                if result["source_tier"] == "official"
+            ]
+        )
+        if len(results) >= 18 or official_count >= 6:
+            break
+
+    tier_priority = {
+        "official": 0,
+        "likely_official": 1,
+        "education_domain": 2,
+        "third_party": 3,
+    }
+    results.sort(key=lambda item: tier_priority.get(item["source_tier"], 9))
+    return results[:12]
 
 
 def _profile_payload(user: Any) -> dict[str, Any]:
@@ -191,11 +332,11 @@ def _prompt(
         "target_university": university_name,
         "student_profile": _profile_payload(user),
         "student_achievements": _achievement_payload(achievements),
-        "google_search_results": search_results,
+        "web_search_results": search_results,
     }
     return (
         "You are ApplyMap Chancellor. Give a concise, factual action plan for one target university. "
-        "Use only the student profile, achievements, and the supplied Google Custom Search results. "
+        "Use only the student profile, achievements, and the supplied web search results. "
         "Do not invent admission requirements, scores, deadlines, program names, or scholarships. "
         "If a fact is not supported by a source result, write that it cannot be confirmed from the current sources.\n\n"
         "Kazakhstan context: interpret UNT/ENT, NIS Grade 12 Certificate, NIS school context, IB, A-levels, "
@@ -205,7 +346,7 @@ def _prompt(
         f"{CHANCELLOR_COUNSELOR_FRAMEWORK}\n\n"
         "Be direct. Avoid motivational filler. Identify exams that could materially improve the application, "
         "activities that are low-value for this target, and research or summer programs only when they appear "
-        "in the supplied source results. If google_search_results is empty, say current university facts cannot "
+        "in the supplied source results. If web_search_results is empty, say current university facts cannot "
         "be confirmed and give only general next steps that do not depend on current requirements. Return JSON only.\n\n"
         f"Input JSON:\n{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
