@@ -45,7 +45,7 @@ export function useAuth() {
       const token = res.data.data?.access_token;
       if (token) setStoredAuthToken(token);
       queryClient.setQueryData(["auth", "me"], res.data.data?.user);
-      router.push("/onboarding");
+      router.push("/profile");
     },
   });
 
