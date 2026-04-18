@@ -639,8 +639,49 @@ export default function VaultPage() {
     },
   });
 
+  const shortlistMutation = useMutation({
+    mutationFn: (limit: number) => achievementsApi.shortlist(limit),
+    onSuccess: (response) => {
+      const result = response.data.data as AchievementImportResult;
+      setAllImportResult(result);
+      setImportProgress((current) =>
+        current ? { ...current, currentStepIndex: 5 } : current
+      );
+
+      try {
+        localStorage.setItem(IMPORT_ANALYSIS_STORAGE_KEY, JSON.stringify(result));
+      } catch {}
+
+      const reorderedActivityIds = [
+        ...result.top_activities.map((item) => item.achievement_id),
+        ...result.imported_achievements
+          .filter((achievement) => achievement.type === "activity")
+          .map((achievement) => achievement.id),
+        ...activities.map((achievement) => achievement.id),
+      ];
+      saveOrder(Array.from(new Set(reorderedActivityIds)));
+
+      toast.success("Built a Common App shortlist from your current vault");
+    },
+    onError: (error: unknown) => {
+      setImportProgress((current) =>
+        current ? { ...current, currentStepIndex: 3 } : current
+      );
+      const detail =
+        typeof error === "object" &&
+        error &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
+          ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : "Could not build a shortlist from the current vault.";
+      toast.error(detail);
+    },
+  });
+
+  const isAnalyzing = importMutation.isPending || shortlistMutation.isPending;
+
   useEffect(() => {
-    if (!importMutation.isPending) return;
+    if (!isAnalyzing) return;
 
     const interval = window.setInterval(() => {
       setImportProgress((current) => {
@@ -653,7 +694,7 @@ export default function VaultPage() {
     }, 1800);
 
     return () => window.clearInterval(interval);
-  }, [importMutation.isPending]);
+  }, [isAnalyzing]);
 
   // Load order from localStorage
   useEffect(() => {
@@ -809,6 +850,38 @@ export default function VaultPage() {
     });
   };
 
+  const handleBuildFromVault = () => {
+    if (achievements.length === 0) {
+      toast.error("Add at least one achievement before building a shortlist.");
+      return;
+    }
+
+    const parsedLimit = Number(wordLimit);
+    if (!Number.isFinite(parsedLimit) || parsedLimit < 5 || parsedLimit > 40) {
+      toast.error("Set a word limit between 5 and 40.");
+      return;
+    }
+
+    setLastImportFile(null);
+    setClarificationAnswers({});
+    setAllImportResult(null);
+    setImportProgress({
+      fileName: "Current Vault",
+      fileSizeLabel: `${achievements.length} saved items`,
+      currentStepIndex: 0,
+      sourcePreview: achievements
+        .map((achievement) =>
+          [achievement.title, achievement.organization_name, achievement.description_raw]
+            .filter(Boolean)
+            .join(" - ")
+        )
+        .filter(Boolean)
+        .slice(0, 6),
+    });
+
+    shortlistMutation.mutate(parsedLimit);
+  };
+
   return (
     <div className="w-full max-w-none p-6 lg:p-8">
       <div className="mb-6 flex items-center justify-between">
@@ -876,9 +949,11 @@ export default function VaultPage() {
             wordLimit={wordLimit}
             onWordLimitChange={setWordLimit}
             onUploadClick={handleImportClick}
+            onBuildFromVault={handleBuildFromVault}
             onReanalyze={handleReanalyze}
             onClear={clearImportAnalysis}
             isImporting={importMutation.isPending}
+            isBuildingFromVault={shortlistMutation.isPending}
             importProgress={importProgress}
             clarificationAnswers={clarificationAnswers}
             onClarificationAnswerChange={handleClarificationAnswerChange}

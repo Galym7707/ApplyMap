@@ -36,6 +36,10 @@ class AchievementUpdate(BaseModel):
     truth_risk_flag: Optional[bool] = None
 
 
+class AchievementShortlistRequest(BaseModel):
+    word_limit: int = Field(22, ge=5, le=40)
+
+
 class EvidenceFileOut(BaseModel):
     id: UUID
     file_url: str

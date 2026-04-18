@@ -53,6 +53,39 @@ const LIVE_IMPORT_STEPS: AchievementImportStep[] = [
   },
 ];
 
+const LIVE_VAULT_STEPS: AchievementImportStep[] = [
+  {
+    key: "read_vault",
+    label: "Read current vault",
+    status: "pending",
+    detail: "Loading the activities and honors already saved in your account.",
+  },
+  {
+    key: "analyze_vault",
+    label: "Analyze stored achievements",
+    status: "pending",
+    detail: "Ranking activities and honors by strength, selectivity, continuity, and distinctiveness.",
+  },
+  {
+    key: "common_app_format",
+    label: "Common App formatting",
+    status: "pending",
+    detail: "Writing copy-paste-ready activity and honor fields under character limits.",
+  },
+  {
+    key: "verify_claims",
+    label: "Check uncertainty",
+    status: "pending",
+    detail: "Flagging missing dates, unclear award levels, unsupported metrics, and evidence gaps.",
+  },
+  {
+    key: "save_shortlist",
+    label: "Show shortlist",
+    status: "pending",
+    detail: "Preparing the Top Activities and Top Honors cards for this screen.",
+  },
+];
+
 export interface ImportProgressState {
   fileName: string;
   fileSizeLabel: string;
@@ -243,7 +276,8 @@ function ImportTracePanel({
 }) {
   if (!isImporting && !result) return null;
 
-  const liveSteps = LIVE_IMPORT_STEPS.map((step, index) => ({
+  const liveTemplate = progress?.fileName === "Current Vault" ? LIVE_VAULT_STEPS : LIVE_IMPORT_STEPS;
+  const liveSteps = liveTemplate.map((step, index) => ({
     ...step,
     status:
       !progress || index > progress.currentStepIndex
@@ -465,9 +499,11 @@ export function AllAchievementsPanel({
   wordLimit,
   onWordLimitChange,
   onUploadClick,
+  onBuildFromVault,
   onReanalyze,
   onClear,
   isImporting,
+  isBuildingFromVault,
   importProgress,
   clarificationAnswers,
   onClarificationAnswerChange,
@@ -480,9 +516,11 @@ export function AllAchievementsPanel({
   wordLimit: string;
   onWordLimitChange: (value: string) => void;
   onUploadClick: () => void;
+  onBuildFromVault: () => void;
   onReanalyze: () => void;
   onClear: () => void;
   isImporting: boolean;
+  isBuildingFromVault: boolean;
   importProgress: ImportProgressState | null;
   clarificationAnswers: ClarificationAnswers;
   onClarificationAnswerChange: (key: string, value: string) => void;
@@ -492,6 +530,11 @@ export function AllAchievementsPanel({
   honorCount: number;
 }) {
   const hasClarificationAnswers = Object.values(clarificationAnswers).some((value) => value.trim().length > 0);
+  const isWorking = isImporting || isBuildingFromVault;
+  const latestRunCount =
+    result?.file_name === "Current Vault"
+      ? result.top_activities.length + result.top_honors.length
+      : result?.imported_count ?? 0;
 
   return (
     <div className="space-y-6">
@@ -552,7 +595,7 @@ export function AllAchievementsPanel({
               <Button
                 className="mt-4 w-full gap-2 bg-navy-950 text-white hover:bg-navy-900"
                 onClick={onUploadClick}
-                disabled={isImporting}
+                disabled={isWorking}
               >
                 {isImporting ? (
                   <>
@@ -566,6 +609,29 @@ export function AllAchievementsPanel({
                   </>
                 )}
               </Button>
+              <Button
+                className="mt-2 w-full gap-2"
+                variant="outline"
+                onClick={onBuildFromVault}
+                disabled={isWorking || achievementCount === 0}
+              >
+                {isBuildingFromVault ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Building from current vault...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Build shortlist from current vault
+                  </>
+                )}
+              </Button>
+              {achievementCount > 0 && (
+                <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                  Use this when your achievements are already saved but no AI shortlist appears below.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -586,16 +652,20 @@ export function AllAchievementsPanel({
             <p className="mt-1 text-sm text-slate-500">Live counts already stored in your vault</p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Latest Import</p>
-            <p className="mt-2 text-3xl font-semibold text-slate-900">{result?.imported_count ?? 0}</p>
-            <p className="mt-1 text-sm text-slate-500">New items extracted from the latest uploaded file</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Latest Run</p>
+            <p className="mt-2 text-3xl font-semibold text-slate-900">{latestRunCount}</p>
+            <p className="mt-1 text-sm text-slate-500">
+              {result?.file_name === "Current Vault"
+                ? "Shortlisted fields generated from saved vault items"
+                : "New items extracted from the latest uploaded file"}
+            </p>
           </div>
         </div>
       </div>
 
       {result ? (
         <>
-          <ImportTracePanel result={result} progress={importProgress} isImporting={isImporting} />
+          <ImportTracePanel result={result} progress={importProgress} isImporting={isWorking} />
 
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -630,9 +700,9 @@ export function AllAchievementsPanel({
                 variant="outline"
                 className="w-full gap-2 lg:w-auto"
                 onClick={onReanalyze}
-                disabled={isImporting || !hasClarificationAnswers || !canReanalyze}
+                disabled={isWorking || !hasClarificationAnswers || !canReanalyze}
               >
-                {isImporting ? (
+                {isWorking ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <RefreshCw className="h-4 w-4" />
@@ -711,13 +781,13 @@ export function AllAchievementsPanel({
         </>
       ) : (
         <>
-          <ImportTracePanel result={result} progress={importProgress} isImporting={isImporting} />
-          {!isImporting && (
+          <ImportTracePanel result={result} progress={importProgress} isImporting={isWorking} />
+          {!isWorking && (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-8 py-12 text-center">
               <Sparkles className="mx-auto h-8 w-8 text-slate-300" />
               <h3 className="mt-4 text-sm font-semibold text-slate-700">No AI shortlist yet</h3>
               <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                Upload a mixed achievement file to generate the strongest activity and honor shortlist on this screen.
+                Upload a mixed achievement file or build a shortlist from the achievements already saved in your vault.
               </p>
             </div>
           )}
