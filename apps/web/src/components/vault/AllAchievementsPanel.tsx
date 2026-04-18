@@ -62,6 +62,13 @@ export interface ImportProgressState {
 
 export type ClarificationAnswers = Record<string, string>;
 
+type ClarificationField = {
+  key: string;
+  label: string;
+  type: "number" | "text";
+  placeholder: string;
+};
+
 function CharacterBadge({ count = 0, limit }: { count?: number; limit: number }) {
   const isOver = count > limit;
   return (
@@ -93,30 +100,80 @@ function CommonAppField({
   );
 }
 
-function getAnswerInputProps(question: string) {
+function getFallbackAnswerInputProps(question: string) {
   const normalized = question.toLowerCase();
-  if (normalized.includes("hours per week") || normalized.includes("hrs/week")) {
-    return { type: "number", placeholder: "e.g. 5" };
-  }
-  if (normalized.includes("weeks per year") || normalized.includes("wks/year")) {
-    return { type: "number", placeholder: "e.g. 36" };
-  }
   if (normalized.includes("start date")) {
-    return { type: "text", placeholder: "e.g. 2024-09" };
+    return { type: "text" as const, placeholder: "e.g. 2024-09" };
   }
   if (normalized.includes("end date")) {
-    return { type: "text", placeholder: "e.g. 2026-05 or Present" };
+    return { type: "text" as const, placeholder: "e.g. 2026-05 or Present" };
   }
   if (normalized.includes("year") || normalized.includes("date")) {
-    return { type: "text", placeholder: "e.g. 2025, Grade 11" };
+    return { type: "text" as const, placeholder: "e.g. 2025, Grade 11" };
   }
   if (normalized.includes("participant") || normalized.includes("team")) {
-    return { type: "text", placeholder: "e.g. 200 participants / 30 teams" };
+    return { type: "text" as const, placeholder: "e.g. 200 participants / 30 teams" };
   }
   if (normalized.includes("status")) {
-    return { type: "text", placeholder: "e.g. active, maintained, completed" };
+    return { type: "text" as const, placeholder: "e.g. active, maintained, completed" };
   }
-  return { type: "text", placeholder: "Type the missing detail here" };
+  return { type: "text" as const, placeholder: "Type the missing detail here" };
+}
+
+function getClarificationFields(question: string): ClarificationField[] {
+  const normalized = question.toLowerCase();
+  const fields: ClarificationField[] = [];
+  const addField = (field: ClarificationField) => {
+    if (!fields.some((item) => item.key === field.key)) {
+      fields.push(field);
+    }
+  };
+
+  if (normalized.includes("exact year") || /\byear\b/.test(normalized)) {
+    addField({ key: "year", label: "Exact year", type: "text", placeholder: "e.g. 2025" });
+  }
+  if (normalized.includes("level")) {
+    addField({ key: "level", label: "Level", type: "text", placeholder: "e.g. national / international" });
+  }
+  if (normalized.includes("start date") || normalized.includes("when did you start")) {
+    addField({ key: "start_date", label: "Start date", type: "text", placeholder: "e.g. 2024-09" });
+  }
+  if (normalized.includes("end date") || normalized.includes("when did it end")) {
+    addField({ key: "end_date", label: "End date", type: "text", placeholder: "e.g. 2025-05 or Present" });
+  }
+  if (normalized.includes("hours per week") || normalized.includes("hrs/week")) {
+    addField({ key: "hours_per_week", label: "Hours per week", type: "number", placeholder: "e.g. 5" });
+  }
+  if (normalized.includes("weeks per year") || normalized.includes("wks/year")) {
+    addField({ key: "weeks_per_year", label: "Weeks per year", type: "number", placeholder: "e.g. 36" });
+  }
+  if (
+    normalized.includes("ongoing") ||
+    normalized.includes("still active") ||
+    normalized.includes("active and maintained") ||
+    normalized.includes("project status")
+  ) {
+    addField({ key: "status", label: "Current status", type: "text", placeholder: "e.g. ongoing / completed in 2025" });
+  }
+  if (normalized.includes("semi-finalist") || normalized.includes("semifinalist") || normalized.includes("finalist")) {
+    addField({ key: "result", label: "Result", type: "text", placeholder: "e.g. Finalist" });
+  }
+  if (normalized.includes("prize")) {
+    addField({ key: "prize", label: "Prize confirmation", type: "text", placeholder: "e.g. 200,000 KZT prize confirmed" });
+  }
+  if (normalized.includes("participant") || normalized.includes("team")) {
+    addField({ key: "scale", label: "Scale", type: "text", placeholder: "e.g. 200 participants / 30 teams" });
+  }
+  if (normalized.includes("outcome") || normalized.includes("specific project")) {
+    addField({ key: "outcome", label: "Specific outcome", type: "text", placeholder: "e.g. built a working prototype" });
+  }
+
+  if (fields.length === 0) {
+    const fallback = getFallbackAnswerInputProps(question);
+    return [{ key: "detail", label: "Missing detail", type: fallback.type, placeholder: fallback.placeholder }];
+  }
+
+  return fields;
 }
 
 function ClarificationFields({
@@ -139,20 +196,35 @@ function ClarificationFields({
       </p>
       {questions.map((question, index) => {
         const key = `${scope}:${index}:${question}`;
-        const inputProps = getAnswerInputProps(question);
+        const fields = getClarificationFields(question);
+        const singleField = fields.length === 1;
         return (
           <div key={key} className="grid gap-2 md:grid-cols-[minmax(0,0.95fr)_minmax(180px,0.75fr)]">
             <Label htmlFor={key} className="text-xs leading-relaxed text-amber-950">
               {question}
             </Label>
-            <Input
-              id={key}
-              type={inputProps.type}
-              value={answers[key] ?? ""}
-              placeholder={inputProps.placeholder}
-              onChange={(event) => onAnswerChange(key, event.target.value)}
-              className="h-9 border-amber-200 bg-white text-sm"
-            />
+            <div className={singleField ? "" : "grid gap-2 sm:grid-cols-2"}>
+              {fields.map((field) => {
+                const fieldKey = `${key}:${field.key}`;
+                return (
+                  <div key={fieldKey} className="space-y-1">
+                    {!singleField && (
+                      <Label htmlFor={fieldKey} className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                        {field.label}
+                      </Label>
+                    )}
+                    <Input
+                      id={fieldKey}
+                      type={field.type}
+                      value={answers[fieldKey] ?? ""}
+                      placeholder={field.placeholder}
+                      onChange={(event) => onAnswerChange(fieldKey, event.target.value)}
+                      className="h-9 border-amber-200 bg-white text-sm"
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         );
       })}

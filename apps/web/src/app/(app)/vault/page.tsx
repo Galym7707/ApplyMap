@@ -810,7 +810,7 @@ export default function VaultPage() {
   };
 
   return (
-    <div className="max-w-6xl p-8">
+    <div className="w-full max-w-none p-6 lg:p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Achievement Vault</h1>
