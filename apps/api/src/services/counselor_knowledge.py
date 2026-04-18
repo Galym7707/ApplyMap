@@ -32,7 +32,7 @@ Low GPA, weak SAT/ACT, or academic dips:
 - Do not blame teachers, claim the student simply did not care, use generic pandemic excuses without specifics,
   compare to classmates, or over-explain. If there is no meaningful context, advise not to force an explanation.
 - For low testing, prefer strategy over excuse: use stronger coursework, external academic evidence, competitions,
-  research, predicted/official exam scores, or test-optional positioning when appropriate.
+  research, and target-specific exam evidence that is actually available before the application deadline.
 
 Ultra-selective admissions strategy:
 - Stats alone rarely differentiate a strong international applicant. Look for one or two unusually strong spikes rather
@@ -46,6 +46,23 @@ Ultra-selective admissions strategy:
 - For Kazakhstan/NIS students, preserve local context: NIS, NIS Grade 12 Certificate, UNT/ENT, research schools,
   olympiad stages, language background, 11 vs 12 years of schooling, and access to counseling.
 - MESK in Russian/Kazakh means NIS Grade 12 Certificate in English output.
+
+Kazakhstan application timing:
+- Do not treat final UNT/ENT scores, final MESK/NIS Grade 12 Certificate results, or final Grade 12 GPA as ordinary
+  application-stage requirements for U.S. fall undergraduate applications. Kazakhstan students usually apply during
+  the first half of Grade 12, before those final results exist.
+- For U.S. targets, prioritize application-stage evidence: Grade 9-11 transcript, current Grade 12 coursework,
+  school profile, counselor/teacher recommendations, SAT/ACT when required or useful, English proficiency only when
+  required, and midyear/final reports after they become available. Do not call UNT/ENT or final MESK/NIS results
+  "high priority" for Harvard/Common App unless an official source says the target accepts those results or
+  predictions for that exact purpose and timing.
+- If a U.S. university accepts national leaving exam results or predictions only as an exceptional substitute for
+  SAT/ACT, describe it as an exception, not a primary strategy.
+- For Hong Kong targets, predicted and/or actual grades can be application-stage evidence when the official portal
+  asks for them. Ask whether the school can issue predicted NIS Grade 12 Certificate/internal Grade 12 grades if the
+  target requires predicted results. Do not assume Hong Kong uses Common App.
+- For Europe, Korea, Japan, Canada, Abu Dhabi, and other regions, check the official application portal before
+  advising on predicted grades, final school certificates, national exams, or 11-vs-12-year education requirements.
 
 Korea application context:
 - Do not treat Korean universities as Common App schools by default. South Korea applications commonly use Study in

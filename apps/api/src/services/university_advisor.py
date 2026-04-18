@@ -62,6 +62,50 @@ ADVISOR_SCHEMA = {
     ],
 }
 
+KAZAKHSTAN_FINAL_CREDENTIAL_PHRASES = (
+    "nis grade 12 certificate",
+    "grade 12 certificate",
+    "mesk",
+    "мэск",
+    "нзм 12",
+    "ниc grade 12",
+    "certificate gpa",
+)
+
+KAZAKHSTAN_FINAL_CREDENTIAL_PATTERNS = (
+    r"\bunt\b",
+    r"\bent\b",
+    r"\bент\b",
+    r"\bұбт\b",
+)
+
+US_TARGET_NAME_HINTS = (
+    "common app",
+    "harvard",
+    "stanford",
+    "mit",
+    "massachusetts institute of technology",
+    "yale",
+    "princeton",
+    "columbia",
+    "brown",
+    "cornell",
+    "dartmouth",
+    "university of pennsylvania",
+    "upenn",
+    "duke",
+    "northwestern",
+    "uchicago",
+    "university of chicago",
+    "vanderbilt",
+    "rice",
+    "washington university in st. louis",
+    "washu",
+    "university of california",
+    "caltech",
+    "california institute of technology",
+)
+
 
 class SearchNotConfiguredError(RuntimeError):
     pass
@@ -222,6 +266,92 @@ def _source_tier(url: str, university_name: str, title: str = "") -> str:
     return "third_party"
 
 
+def _target_region(university_name: str, search_results: list[dict[str, str]]) -> str:
+    text = " ".join(
+        [
+            university_name,
+            *[item.get("url", "") for item in search_results],
+            *[item.get("title", "") for item in search_results],
+        ]
+    ).lower()
+    hosts = [urlparse(item.get("url", "")).netloc.lower() for item in search_results]
+    if "hong kong" in text or any(host.endswith(".hk") for host in hosts):
+        return "hong_kong"
+    if "korea" in text or any(host.endswith(".kr") for host in hosts):
+        return "korea"
+    if "japan" in text or any(host.endswith(".jp") for host in hosts):
+        return "japan"
+    if any(hint in text for hint in US_TARGET_NAME_HINTS):
+        return "us"
+    if any(host.endswith(".edu") for host in hosts):
+        return "us"
+    return "unknown"
+
+
+def _is_kazakhstan_final_credential(exam_name: str) -> bool:
+    normalized = exam_name.lower()
+    return any(term in normalized for term in KAZAKHSTAN_FINAL_CREDENTIAL_PHRASES) or any(
+        re.search(pattern, normalized) for pattern in KAZAKHSTAN_FINAL_CREDENTIAL_PATTERNS
+    )
+
+
+def _append_unique(values: list[str], item: str) -> None:
+    if item not in values:
+        values.append(item)
+
+
+def _sanitize_application_timeline(
+    plan: dict[str, Any],
+    *,
+    university_name: str,
+    search_results: list[dict[str, str]],
+) -> dict[str, Any]:
+    region = _target_region(university_name, search_results)
+    plan.setdefault("exams_to_prioritize", [])
+    plan.setdefault("profile_actions", [])
+    plan.setdefault("source_notes", [])
+
+    if region == "us":
+        filtered_exams = []
+        removed_credentials: list[str] = []
+        for item in plan.get("exams_to_prioritize", []):
+            exam_name = str(item.get("exam") or "")
+            if _is_kazakhstan_final_credential(exam_name):
+                removed_credentials.append(exam_name)
+                continue
+            filtered_exams.append(item)
+        plan["exams_to_prioritize"] = filtered_exams
+
+        if removed_credentials:
+            _append_unique(
+                plan["profile_actions"],
+                (
+                    "For U.S. fall applications, do not rely on final UNT/ENT or final NIS Grade 12 Certificate/MESK "
+                    "results as application-stage exams unless the target's official source explicitly allows that "
+                    "for the relevant deadline. Use school transcripts, current Grade 12 coursework, school profile, "
+                    "recommendations, and required standardized tests."
+                ),
+            )
+            _append_unique(
+                plan["source_notes"],
+                (
+                    "Timeline correction: removed Kazakhstan final credentials from U.S. exams_to_prioritize. "
+                    "Only mention them as final/post-admission records or as an official-source exception."
+                ),
+            )
+
+    if region == "hong_kong":
+        _append_unique(
+            plan["profile_actions"],
+            (
+                "For Hong Kong targets, confirm whether the portal asks for predicted and/or actual school-leaving "
+                "results, then ask your school whether it can issue predicted NIS Grade 12 Certificate/internal Grade 12 grades."
+            ),
+        )
+
+    return plan
+
+
 def search_university_sources(university_name: str, intended_major: str | None = None) -> list[dict[str, str]]:
     major = intended_major or "undergraduate"
     queries = [
@@ -339,15 +469,29 @@ def _prompt(
         "Use only the student profile, achievements, and the supplied web search results. "
         "Do not invent admission requirements, scores, deadlines, program names, or scholarships. "
         "If a fact is not supported by a source result, write that it cannot be confirmed from the current sources.\n\n"
-        "Kazakhstan context: interpret UNT/ENT, NIS Grade 12 Certificate, NIS school context, IB, A-levels, "
-        "and 11 vs 12 years of schooling as important fit factors. MESK in Russian/Kazakh user language maps "
+        "Kazakhstan context: interpret NIS school context, IB, A-levels, UNT/ENT, MESK/NIS Grade 12 Certificate, "
+        "and 11 vs 12 years of schooling with strict timeline awareness. MESK in Russian/Kazakh user language maps "
         "to NIS Grade 12 Certificate in English.\n\n"
         f"{ADMISSIONS_FRAMEWORK}\n\n"
         f"{CHANCELLOR_COUNSELOR_FRAMEWORK}\n\n"
         "Be direct. Avoid motivational filler. Identify exams that could materially improve the application, "
         "activities that are low-value for this target, and research or summer programs only when they appear "
         "in the supplied source results. If web_search_results is empty, say current university facts cannot "
-        "be confirmed and give only general next steps that do not depend on current requirements. Return JSON only.\n\n"
+        "be confirmed and give only general next steps that do not depend on current requirements.\n\n"
+        "Critical Kazakhstan timeline rules:\n"
+        "- For U.S. fall applications, do not list final UNT/ENT, final MESK/NIS Grade 12 Certificate, or final Grade 12 "
+        "GPA as high/medium exams to prioritize unless the target's official source explicitly allows that for the "
+        "relevant deadline. Kazakhstan students commonly apply during Grade 12 before final school-leaving results exist.\n"
+        "- For U.S. targets, exams_to_prioritize should focus only on application-stage tests such as SAT/ACT when "
+        "required/useful and English proficiency when the official source requires it. Treat transcripts, school reports, "
+        "course rigor, midyear reports, and final reports as application records, not exams to prioritize.\n"
+        "- If a U.S. target official source accepts national leaving exam results or predictions only as an exception "
+        "when SAT/ACT access is impossible, describe it as an exception in source_notes/profile_actions, not as the main plan.\n"
+        "- For Hong Kong targets, predicted and/or actual grades may matter when the official portal asks for them; ask "
+        "whether the school can issue predicted NIS Grade 12 Certificate/internal Grade 12 grades. Do not assume U.S. "
+        "Common App logic applies to Hong Kong.\n"
+        "- For every other country, verify the exact portal timing before advising on predicted grades, final certificates, "
+        "or national exams. Return JSON only.\n\n"
         f"Input JSON:\n{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
 
@@ -409,7 +553,14 @@ def generate_university_action_plan(
                 json=request_payload,
             )
             response.raise_for_status()
-        return json.loads(_extract_text(response.json()))
+        plan = json.loads(_extract_text(response.json()))
+        if not isinstance(plan, dict):
+            raise ValueError("Advisor response was not a JSON object")
+        return _sanitize_application_timeline(
+            plan,
+            university_name=university_name,
+            search_results=search_results,
+        )
     except (httpx.HTTPError, json.JSONDecodeError, KeyError, TypeError, ValueError):
         return {
             "summary": "The Chancellor could not generate a reliable JSON plan from the current sources.",
