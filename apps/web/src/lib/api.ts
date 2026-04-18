@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 export const AUTH_TOKEN_KEY = "applymap_token";
 const LEGACY_AUTH_TOKEN_KEY = "sourcelock_token";
 

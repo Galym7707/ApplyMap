@@ -2,6 +2,14 @@ import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 
+function getServerApiUrl() {
+  const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  if (apiUrl === "/" || apiUrl.startsWith("/")) {
+    return "http://127.0.0.1:8000";
+  }
+  return apiUrl.replace(/\/$/, "");
+}
+
 const handler = NextAuth({
   providers: [
     CredentialsProvider({
@@ -14,7 +22,7 @@ const handler = NextAuth({
         if (!credentials?.email || !credentials?.password) return null;
 
         try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
+          const res = await fetch(`${getServerApiUrl()}/api/auth/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

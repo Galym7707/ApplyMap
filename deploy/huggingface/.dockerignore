@@ -1,0 +1,14 @@
+.git
+.turbo
+node_modules
+apps/web/node_modules
+apps/web/.next
+apps/api/.venv
+apps/api/venv
+apps/api/__pycache__
+apps/api/src/**/__pycache__
+apps/api/alembic/**/__pycache__
+*.log
+.env
+.env.*
+!.env.example
