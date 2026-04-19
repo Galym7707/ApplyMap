@@ -29,9 +29,10 @@ import { toast } from "sonner";
 import type { Achievement, AchievementImportResult } from "@/types";
 
 const ACTIVITY_ORDER_STORAGE_KEY = "sourcelock_activity_order";
-const IMPORT_ANALYSIS_STORAGE_KEY = "applymap_all_import_analysis";
-const IMPORT_ANALYSIS_SIGNATURE_STORAGE_KEY = "applymap_all_import_analysis_signature";
-const AUTO_SHORTLIST_SIGNATURE_STORAGE_KEY = "applymap_auto_shortlist_signature";
+const SHORTLIST_FORMAT_VERSION = "common-app-fields-v3";
+const IMPORT_ANALYSIS_STORAGE_KEY = "applymap_all_import_analysis_v3";
+const IMPORT_ANALYSIS_SIGNATURE_STORAGE_KEY = "applymap_all_import_analysis_signature_v3";
+const AUTO_SHORTLIST_SIGNATURE_STORAGE_KEY = "applymap_auto_shortlist_signature_v3";
 const TEXT_PREVIEW_EXTENSIONS = new Set(["txt", "md", "csv", "json"]);
 
 // ─── Form schema ────────────────────────────────────────────────────────────
@@ -570,10 +571,12 @@ export default function VaultPage() {
   const honors = achievements.filter((a) => a.type === "honor");
   const vaultSignature = useMemo(
     () =>
-      achievements
-        .map((achievement) => `${achievement.id}:${achievement.updated_at}`)
-        .sort()
-        .join("|"),
+      [
+        SHORTLIST_FORMAT_VERSION,
+        ...achievements
+          .map((achievement) => `${achievement.id}:${achievement.updated_at}`)
+          .sort(),
+      ].join("|"),
     [achievements]
   );
 
@@ -585,6 +588,10 @@ export default function VaultPage() {
     try {
       localStorage.removeItem(IMPORT_ANALYSIS_STORAGE_KEY);
       localStorage.removeItem(IMPORT_ANALYSIS_SIGNATURE_STORAGE_KEY);
+      localStorage.removeItem("applymap_all_import_analysis");
+      localStorage.removeItem("applymap_all_import_analysis_signature");
+      sessionStorage.removeItem(AUTO_SHORTLIST_SIGNATURE_STORAGE_KEY);
+      sessionStorage.removeItem("applymap_auto_shortlist_signature");
     } catch {}
   };
 

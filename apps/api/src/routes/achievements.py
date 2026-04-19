@@ -1,8 +1,10 @@
 import json
+import re
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from ..database import get_db
@@ -58,6 +60,32 @@ COMMON_APP_ACTIVITY_TYPES = (
     "Theater/Drama",
     "Work (Paid)",
     "Other Club/Activity",
+)
+
+CYRILLIC_TRANSLATIONS = (
+    (r"оффлайн\s+год\s+обучения\s+языку\s+программирования\s+python", "offline Python programming year"),
+    (r"год\s+обучения\s+языку\s+программирования\s+python", "Python programming year"),
+    (r"языку\s+программирования\s+python", "Python programming"),
+    (r"был\s+личным\s+ментором", "mentored"),
+    (r"личным\s+ментором", "mentor"),
+    (r"пятерых", "5"),
+    (r"8-?классникам", "8th-graders"),
+    (r"11\s+классником", "11th-grader"),
+    (r"организовали", "organized"),
+    (r"главных\s+ивента", "main events"),
+    (r"подарочные\s+открытки", "greeting cards"),
+    (r"финалист", "Finalist"),
+    (r"полуфиналист", "Semifinalist"),
+    (r"победитель", "Winner"),
+    (r"бронз[а-я]*", "Bronze"),
+    (r"серебр[а-я]*", "Silver"),
+    (r"золот[а-я]*", "Gold"),
+    (r"республиканск[а-я]*", "National"),
+    (r"национальн[а-я]*", "National"),
+    (r"международн[а-я]*", "International"),
+    (r"областн[а-я]*", "Regional"),
+    (r"городск[а-я]*", "City"),
+    (r"место", "Place"),
 )
 
 
@@ -129,6 +157,38 @@ def _clean_text(value) -> str:
     return " ".join(str(value).split())
 
 
+def _english_clean_text(value, fallback: str = "") -> str:
+    text = _clean_text(value)
+    if not text:
+        return _clean_text(fallback)
+
+    text = re.sub(r"\bRepublican\b", "National", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bRespublikalyk\b", "National", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bRespublikanskiy\b", "National", text, flags=re.IGNORECASE)
+    for pattern, replacement in CYRILLIC_TRANSLATIONS:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+
+    # Common App fields must be student-facing English. If a raw stored entry still
+    # contains untranslated Russian/Kazakh fragments, keep the verified English
+    # parts and remove only the remaining untranslated script.
+    text = re.sub(r"\([^)]*[\u0400-\u04FF][^)]*\)", "", text)
+    text = re.sub(r"[\u0400-\u04FF]+", "", text)
+    text = re.sub(r"\(\s*\)", "", text)
+    text = re.sub(r"\s+([,.;:])", r"\1", text)
+    text = re.sub(r"([,.;:]){2,}", r"\1", text)
+    text = _clean_text(text).strip(" -;,.:")
+
+    if not text:
+        text = _clean_text(fallback)
+    if not text:
+        return ""
+
+    for index, char in enumerate(text):
+        if char.isalpha():
+            return text[:index] + char.upper() + text[index + 1 :]
+    return text
+
+
 def _enum_value(value) -> str:
     if value is None:
         return ""
@@ -144,6 +204,230 @@ def _truncate(value: str, limit: int) -> str:
     if last_space > max(0, limit - 24):
         truncated = truncated[:last_space]
     return truncated.rstrip(",.;: ")
+
+
+def _profile_graduation_year(user: Any | None) -> int | None:
+    profile = getattr(user, "profile", None)
+    graduation_year = getattr(profile, "graduation_year", None)
+    try:
+        return int(graduation_year) if graduation_year else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _years_from_text(*values: Any) -> list[int]:
+    years: list[int] = []
+    for value in values:
+        for match in re.findall(r"\b(20\d{2}|19\d{2})\b", _clean_text(value)):
+            year = int(match)
+            if 1990 <= year <= 2100 and year not in years:
+                years.append(year)
+    return years
+
+
+def _achievement_year(achievement: Achievement) -> int | None:
+    if achievement.end_date:
+        return achievement.end_date.year
+    if achievement.start_date:
+        return achievement.start_date.year
+    years = _years_from_text(
+        achievement.title,
+        achievement.organization_name,
+        achievement.role_title,
+        achievement.description_raw,
+    )
+    return max(years) if years else None
+
+
+def _grade_for_year(year: int | None, graduation_year: int | None) -> int | None:
+    if not year or not graduation_year:
+        return None
+    grade = 12 - (graduation_year - year)
+    if 9 <= grade <= 12:
+        return grade
+    return None
+
+
+def _activity_grade_levels(achievement: Achievement, user: Any | None) -> str | None:
+    graduation_year = _profile_graduation_year(user)
+    years: list[int] = []
+    if achievement.start_date and achievement.end_date:
+        years = list(range(achievement.start_date.year, achievement.end_date.year + 1))
+    elif achievement.start_date:
+        years = list(range(achievement.start_date.year, min(date.today().year, achievement.start_date.year + 4) + 1))
+    else:
+        years = _years_from_text(
+            achievement.title,
+            achievement.organization_name,
+            achievement.role_title,
+            achievement.description_raw,
+        )
+
+    grades = sorted(
+        {
+            grade
+            for grade in (_grade_for_year(year, graduation_year) for year in years)
+            if grade is not None
+        }
+    )
+    return ", ".join(str(grade) for grade in grades) or None
+
+
+def _honor_grade_level(achievement: Achievement, user: Any | None) -> str | None:
+    grade = _grade_for_year(_achievement_year(achievement), _profile_graduation_year(user))
+    return str(grade) if grade is not None else None
+
+
+def _activity_timing(achievement: Achievement) -> str | None:
+    if achievement.weeks_per_year is None:
+        return None
+    if achievement.weeks_per_year >= 45:
+        return "All year"
+    if achievement.weeks_per_year >= 20:
+        return "School year"
+    return "School break / seasonal"
+
+
+def _activity_continue(achievement: Achievement) -> str | None:
+    if achievement.end_date is None:
+        return "Continue"
+    return "Continue" if achievement.end_date >= date.today() else "Completed"
+
+
+def _number_label(value: Any) -> str | None:
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return f"{number:g}"
+
+
+def _common_app_honor_level(achievement: Achievement, item: dict | None = None) -> str | None:
+    candidates = [
+        item.get("common_app_honor_level") if item else None,
+        item.get("honor_level") if item else None,
+        _enum_value(achievement.impact_scope),
+        achievement.title,
+        achievement.organization_name,
+        achievement.description_raw,
+    ]
+    text = " ".join(_english_clean_text(value).lower() for value in candidates if _clean_text(value))
+    if not text:
+        return None
+    if "international" in text:
+        return "International"
+    if "national" in text or "republican" in text or "respublik" in text:
+        return "National"
+    if "regional" in text or "state" in text or "city" in text or "local" in text:
+        return "State/Regional"
+    if "school" in text:
+        return "School"
+
+    scope = _enum_value(achievement.impact_scope)
+    if scope == "international":
+        return "International"
+    if scope == "national":
+        return "National"
+    if scope in {"regional", "local"}:
+        return "State/Regional"
+    if scope == "school":
+        return "School"
+    return None
+
+
+def _format_honor_description(achievement: Achievement, item: dict | None = None) -> str:
+    raw_value = (
+        item.get("common_app_honor_description")
+        if item
+        else None
+    ) or (
+        item.get("common_app_text")
+        if item
+        else None
+    ) or achievement.title
+    value = _english_clean_text(raw_value, achievement.title)
+    organization = _english_clean_text(achievement.organization_name)
+    if organization and organization.lower() not in value.lower() and len(value) + len(organization) + 2 <= HONOR_DESCRIPTION_LIMIT:
+        value = f"{value}, {organization}"
+
+    year = _achievement_year(achievement)
+    if year:
+        value = re.sub(rf"\b{year}\b", "", value).strip(" ,;-")
+        value = _clean_text(f"{year} {value}")
+    return _truncate(value, HONOR_DESCRIPTION_LIMIT)
+
+
+def _format_activity_description(achievement: Achievement, item: dict | None = None, word_limit: int | None = None) -> str:
+    raw_value = (
+        item.get("common_app_activity_description")
+        if item
+        else None
+    ) or (
+        item.get("common_app_text")
+        if item
+        else None
+    ) or achievement.description_raw or achievement.title
+    value = _english_clean_text(raw_value, achievement.title)
+    if not value:
+        role = _english_clean_text(achievement.role_title)
+        org = _english_clean_text(achievement.organization_name)
+        title = _english_clean_text(achievement.title)
+        value = ". ".join(part for part in (role, org, title) if part)
+    if word_limit and word_limit > 0:
+        words = value.split()
+        if len(words) > word_limit:
+            value = " ".join(words[:word_limit])
+    return _truncate(value, ACTIVITY_DESCRIPTION_LIMIT)
+
+
+def _missing_facts_for_achievement(achievement: Achievement, user: Any | None) -> list[str]:
+    questions: list[str] = []
+    if achievement.type == AchievementType.activity:
+        if not _activity_grade_levels(achievement, user):
+            questions.append("Participation grade levels")
+        if achievement.hours_per_week is None:
+            questions.append("Hours per week")
+        if achievement.weeks_per_year is None:
+            questions.append("Weeks per year")
+        if achievement.end_date is None:
+            questions.append("Current status: continue or completed")
+        return questions
+
+    if _achievement_year(achievement) is None:
+        questions.append("Award year")
+    if not _common_app_honor_level(achievement):
+        questions.append("Level of recognition: School, State/Regional, National, or International")
+    if not _honor_grade_level(achievement, user):
+        questions.append("Grade level when received")
+    return questions
+
+
+def _actionable_missing_facts(
+    achievement: Achievement,
+    item: dict,
+    user: Any | None,
+) -> list[str]:
+    generic_fragments = (
+        "review the original evidence before final submission",
+        "verify the wording against the original evidence",
+    )
+    questions: list[str] = []
+    for value in item.get("missing_or_unclear_facts") or []:
+        text = _english_clean_text(value)
+        if not text:
+            continue
+        normalized = text.lower().rstrip(".")
+        if any(fragment in normalized for fragment in generic_fragments):
+            continue
+        if text not in questions:
+            questions.append(text)
+
+    for question in _missing_facts_for_achievement(achievement, user):
+        if question not in questions:
+            questions.append(question)
+    return questions
 
 
 def _local_achievement_score(achievement: Achievement) -> float:
@@ -187,25 +471,28 @@ def _selection_from_parsed_item(
     achievement: Achievement,
     item: dict,
     rank: int,
+    user: Any | None = None,
+    word_limit: int | None = None,
 ) -> dict:
     common_app_position = _truncate(
-        item.get("common_app_position") or achievement.role_title or achievement.title,
+        _english_clean_text(
+            item.get("common_app_position") or achievement.role_title or achievement.title,
+            achievement.title,
+        ),
         ACTIVITY_POSITION_LIMIT,
     )
     common_app_organization = _truncate(
-        item.get("common_app_organization") or achievement.organization_name or "",
+        _english_clean_text(item.get("common_app_organization") or achievement.organization_name or ""),
         ACTIVITY_ORGANIZATION_LIMIT,
     )
-    common_app_activity_description = _truncate(
-        item.get("common_app_activity_description")
-        or item.get("common_app_text")
-        or achievement.description_raw
-        or achievement.title,
-        ACTIVITY_DESCRIPTION_LIMIT,
+    common_app_activity_description = _format_activity_description(
+        achievement,
+        item,
+        word_limit,
     )
-    common_app_honor_description = _truncate(
-        item.get("common_app_honor_description") or item.get("common_app_text") or achievement.title,
-        HONOR_DESCRIPTION_LIMIT,
+    common_app_honor_description = _format_honor_description(
+        achievement,
+        item,
     )
     common_app_text = (
         common_app_activity_description
@@ -217,7 +504,7 @@ def _selection_from_parsed_item(
         "achievement_id": achievement.id,
         "type": achievement.type,
         "rank": rank,
-        "title": achievement.title,
+        "title": _english_clean_text(achievement.title, achievement.title) or achievement.title,
         "common_app_text": common_app_text,
         "word_count": len(common_app_text.split()),
         "character_count": len(common_app_text),
@@ -229,8 +516,29 @@ def _selection_from_parsed_item(
         "common_app_activity_description": (
             common_app_activity_description if achievement.type == AchievementType.activity else None
         ),
+        "common_app_activity_grade_levels": (
+            _activity_grade_levels(achievement, user) if achievement.type == AchievementType.activity else None
+        ),
+        "common_app_activity_participation_timing": (
+            _activity_timing(achievement) if achievement.type == AchievementType.activity else None
+        ),
+        "common_app_activity_hours_per_week": (
+            _number_label(achievement.hours_per_week) if achievement.type == AchievementType.activity else None
+        ),
+        "common_app_activity_weeks_per_year": (
+            _number_label(achievement.weeks_per_year) if achievement.type == AchievementType.activity else None
+        ),
+        "common_app_activity_continue": (
+            _activity_continue(achievement) if achievement.type == AchievementType.activity else None
+        ),
         "common_app_honor_description": (
             common_app_honor_description if achievement.type == AchievementType.honor else None
+        ),
+        "common_app_honor_level": (
+            _common_app_honor_level(achievement, item) if achievement.type == AchievementType.honor else None
+        ),
+        "common_app_honor_grade_levels": (
+            _honor_grade_level(achievement, user) if achievement.type == AchievementType.honor else None
         ),
         "position_character_count": len(common_app_position) if achievement.type == AchievementType.activity else None,
         "organization_character_count": len(common_app_organization) if achievement.type == AchievementType.activity else None,
@@ -242,28 +550,27 @@ def _selection_from_parsed_item(
         ),
         "selection_reason": item.get("selection_reason") or "Selected from the current vault shortlist pass.",
         "verification_notes": item.get("verification_notes") or [],
-        "missing_or_unclear_facts": item.get("missing_or_unclear_facts") or [],
+        "missing_or_unclear_facts": _actionable_missing_facts(achievement, item, user),
     }
 
 
-def _fallback_selection_from_achievement(achievement: Achievement, rank: int) -> dict:
+def _fallback_selection_from_achievement(
+    achievement: Achievement,
+    rank: int,
+    user: Any | None = None,
+    word_limit: int | None = None,
+) -> dict:
     fallback_item = {
         "common_app_position": achievement.role_title or achievement.title,
         "common_app_organization": achievement.organization_name or "",
         "common_app_activity_type": _common_app_activity_type(achievement),
-        "common_app_activity_description": achievement.description_raw or achievement.title,
-        "common_app_honor_description": (
-            f"{achievement.title}, {achievement.organization_name}"
-            if achievement.organization_name
-            else achievement.title
-        ),
-        "selection_reason": "Added from stored Chancellor scores because no mapped AI shortlist item was returned.",
+        "common_app_activity_description": _format_activity_description(achievement, word_limit=word_limit),
+        "common_app_honor_description": _format_honor_description(achievement),
+        "selection_reason": "Ranked from stored Chancellor scores and formatted for Common App fields.",
         "verification_notes": [],
-        "missing_or_unclear_facts": [
-            "Review the original evidence before final submission."
-        ],
+        "missing_or_unclear_facts": _missing_facts_for_achievement(achievement, user),
     }
-    return _selection_from_parsed_item(achievement, fallback_item, rank)
+    return _selection_from_parsed_item(achievement, fallback_item, rank, user, word_limit)
 
 
 def _mapped_selection(
@@ -272,6 +579,8 @@ def _mapped_selection(
     by_source_index: dict[int, Achievement],
     selected_ids: set,
     limit: int,
+    user: Any | None = None,
+    word_limit: int | None = None,
 ) -> list[dict]:
     selection: list[dict] = []
     sorted_items = sorted(
@@ -292,7 +601,7 @@ def _mapped_selection(
         if not achievement or achievement.type != achievement_type or achievement.id in selected_ids:
             continue
         selected_ids.add(achievement.id)
-        selection.append(_selection_from_parsed_item(achievement, item, len(selection) + 1))
+        selection.append(_selection_from_parsed_item(achievement, item, len(selection) + 1, user, word_limit))
     return selection
 
 
@@ -302,6 +611,8 @@ def _fill_selection_from_vault(
     achievement_type: AchievementType,
     selected_ids: set,
     limit: int,
+    user: Any | None = None,
+    word_limit: int | None = None,
 ) -> list[dict]:
     candidates = sorted(
         (achievement for achievement in achievements if achievement.type == achievement_type),
@@ -314,7 +625,7 @@ def _fill_selection_from_vault(
         if achievement.id in selected_ids:
             continue
         selected_ids.add(achievement.id)
-        selection.append(_fallback_selection_from_achievement(achievement, len(selection) + 1))
+        selection.append(_fallback_selection_from_achievement(achievement, len(selection) + 1, user, word_limit))
     return selection
 
 
@@ -444,6 +755,8 @@ def build_shortlist_from_current_vault(
         AchievementType.activity,
         selected_activity_ids,
         TOP_ACTIVITY_LIMIT,
+        current_user,
+        payload.word_limit,
     )
     honor_selection = _fill_selection_from_vault(
         [],
@@ -451,6 +764,8 @@ def build_shortlist_from_current_vault(
         AchievementType.honor,
         selected_honor_ids,
         TOP_HONOR_LIMIT,
+        current_user,
+        payload.word_limit,
     )
 
     processing_steps = [
@@ -652,30 +967,19 @@ async def import_all_achievements(
     honor_selection = []
 
     for achievement, item in selection_items:
-        rank = item.get("recommended_rank")
+        try:
+            rank = int(item.get("recommended_rank") or 0)
+        except (TypeError, ValueError):
+            rank = 0
         if not rank:
             continue
-        selection_item = {
-            "achievement_id": achievement.id,
-            "type": achievement.type,
-            "rank": rank,
-            "title": achievement.title,
-            "common_app_text": item["common_app_text"],
-            "word_count": len(item["common_app_text"].split()),
-            "character_count": len(item["common_app_text"]),
-            "common_app_activity_type": item.get("common_app_activity_type"),
-            "common_app_position": item.get("common_app_position"),
-            "common_app_organization": item.get("common_app_organization"),
-            "common_app_activity_description": item.get("common_app_activity_description"),
-            "common_app_honor_description": item.get("common_app_honor_description"),
-            "position_character_count": len(item.get("common_app_position") or ""),
-            "organization_character_count": len(item.get("common_app_organization") or ""),
-            "activity_description_character_count": len(item.get("common_app_activity_description") or ""),
-            "honor_character_count": len(item.get("common_app_honor_description") or ""),
-            "selection_reason": item.get("selection_reason") or None,
-            "verification_notes": item.get("verification_notes") or [],
-            "missing_or_unclear_facts": item.get("missing_or_unclear_facts") or [],
-        }
+        selection_item = _selection_from_parsed_item(
+            achievement,
+            item,
+            rank,
+            current_user,
+            word_limit,
+        )
         if achievement.type == AchievementType.activity and rank <= 10:
             activity_selection.append(selection_item)
         if achievement.type == AchievementType.honor and rank <= 5:

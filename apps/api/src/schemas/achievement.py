@@ -89,7 +89,14 @@ class AchievementImportSelectionItem(BaseModel):
     common_app_organization: Optional[str] = None
     common_app_activity_type: Optional[str] = None
     common_app_activity_description: Optional[str] = None
+    common_app_activity_grade_levels: Optional[str] = None
+    common_app_activity_participation_timing: Optional[str] = None
+    common_app_activity_hours_per_week: Optional[str] = None
+    common_app_activity_weeks_per_year: Optional[str] = None
+    common_app_activity_continue: Optional[str] = None
     common_app_honor_description: Optional[str] = None
+    common_app_honor_level: Optional[str] = None
+    common_app_honor_grade_levels: Optional[str] = None
     position_character_count: Optional[int] = None
     organization_character_count: Optional[int] = None
     activity_description_character_count: Optional[int] = None

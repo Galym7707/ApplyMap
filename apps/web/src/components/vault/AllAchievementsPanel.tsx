@@ -174,8 +174,16 @@ function getClarificationFields(question: string): ClarificationField[] {
   if (normalized.includes("exact year") || /\byear\b/.test(normalized)) {
     addField({ key: "year", label: "Exact year", type: "text", placeholder: "e.g. 2025" });
   }
-  if (normalized.includes("level")) {
-    addField({ key: "level", label: "Level", type: "text", placeholder: "e.g. national / international" });
+  if (normalized.includes("grade level") || normalized.includes("participation grade")) {
+    addField({ key: "grade_levels", label: "Grade level(s)", type: "text", placeholder: "e.g. 9, 10, 11, 12" });
+  }
+  if (
+    normalized.includes("level of recognition") ||
+    normalized.includes("recognition level") ||
+    normalized.includes("award level") ||
+    (normalized.includes("level") && !normalized.includes("grade"))
+  ) {
+    addField({ key: "level", label: "Recognition level", type: "text", placeholder: "e.g. National / International" });
   }
   if (normalized.includes("start date") || normalized.includes("when did you start")) {
     addField({ key: "start_date", label: "Start date", type: "text", placeholder: "e.g. 2024-09" });
@@ -216,6 +224,18 @@ function getClarificationFields(question: string): ClarificationField[] {
   }
 
   return fields;
+}
+
+function getActionableClarificationQuestions(questions: string[]) {
+  const genericReviewPhrases = [
+    "review the original evidence before final submission",
+    "verify the wording against the original evidence",
+  ];
+  return questions.filter((question) => {
+    const normalized = question.toLowerCase().trim().replace(/\.$/, "");
+    if (!normalized) return false;
+    return !genericReviewPhrases.some((phrase) => normalized.includes(phrase));
+  });
 }
 
 function ClarificationFields({
@@ -428,7 +448,9 @@ function SelectionColumn({
         </div>
       ) : (
         <div className="space-y-3">
-          {items.map((item) => (
+          {items.map((item) => {
+            const actionableQuestions = getActionableClarificationQuestions(item.missing_or_unclear_facts ?? []);
+            return (
             <div key={item.achievement_id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -444,10 +466,32 @@ function SelectionColumn({
 
               {item.type === "activity" ? (
                 <div className="space-y-2">
-                  <CommonAppStaticField
-                    label="Activity type"
-                    value={item.common_app_activity_type}
-                  />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <CommonAppStaticField
+                      label="Activity type"
+                      value={item.common_app_activity_type}
+                    />
+                    <CommonAppStaticField
+                      label="Participation grades"
+                      value={item.common_app_activity_grade_levels}
+                    />
+                    <CommonAppStaticField
+                      label="Timing"
+                      value={item.common_app_activity_participation_timing}
+                    />
+                    <CommonAppStaticField
+                      label="Hours / week"
+                      value={item.common_app_activity_hours_per_week}
+                    />
+                    <CommonAppStaticField
+                      label="Weeks / year"
+                      value={item.common_app_activity_weeks_per_year}
+                    />
+                    <CommonAppStaticField
+                      label="Continuation"
+                      value={item.common_app_activity_continue}
+                    />
+                  </div>
                   <CommonAppField
                     label="Position / leadership"
                     value={item.common_app_position}
@@ -468,12 +512,24 @@ function SelectionColumn({
                   />
                 </div>
               ) : (
-                <CommonAppField
-                  label="Honor title / description"
-                  value={item.common_app_honor_description || item.common_app_text}
-                  count={item.honor_character_count ?? item.character_count}
-                  limit={HONOR_DESCRIPTION_LIMIT}
-                />
+                <div className="space-y-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <CommonAppStaticField
+                      label="Level of recognition"
+                      value={item.common_app_honor_level}
+                    />
+                    <CommonAppStaticField
+                      label="Grade level"
+                      value={item.common_app_honor_grade_levels}
+                    />
+                  </div>
+                  <CommonAppField
+                    label="Honor title / description"
+                    value={item.common_app_honor_description || item.common_app_text}
+                    count={item.honor_character_count ?? item.character_count}
+                    limit={HONOR_DESCRIPTION_LIMIT}
+                  />
+                </div>
               )}
 
               {item.selection_reason && (
@@ -481,7 +537,7 @@ function SelectionColumn({
               )}
 
               <ClarificationFields
-                questions={item.missing_or_unclear_facts ?? []}
+                questions={actionableQuestions}
                 scope={`item:${item.achievement_id}`}
                 answers={clarificationAnswers}
                 onAnswerChange={onClarificationAnswerChange}
@@ -500,7 +556,8 @@ function SelectionColumn({
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

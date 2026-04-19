@@ -97,7 +97,14 @@ export interface AchievementImportSelectionItem {
   common_app_organization?: string;
   common_app_activity_type?: string;
   common_app_activity_description?: string;
+  common_app_activity_grade_levels?: string;
+  common_app_activity_participation_timing?: string;
+  common_app_activity_hours_per_week?: string;
+  common_app_activity_weeks_per_year?: string;
+  common_app_activity_continue?: string;
   common_app_honor_description?: string;
+  common_app_honor_level?: string;
+  common_app_honor_grade_levels?: string;
   position_character_count?: number;
   organization_character_count?: number;
   activity_description_character_count?: number;
