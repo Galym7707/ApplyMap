@@ -27,6 +27,100 @@ ACTIVITY_DESCRIPTION_LIMIT = 150
 HONOR_DESCRIPTION_LIMIT = 100
 TOP_ACTIVITY_LIMIT = 10
 TOP_HONOR_LIMIT = 5
+COMMON_APP_ACTIVITY_TYPES = (
+    "Academic",
+    "Art",
+    "Athletics: Club",
+    "Athletics: JV/Varsity",
+    "Career Oriented",
+    "Community Service (Volunteer)",
+    "Computer/Technology",
+    "Cultural",
+    "Dance",
+    "Debate/Speech",
+    "Environmental",
+    "Family Responsibilities",
+    "Foreign Exchange",
+    "Foreign Language",
+    "Internship",
+    "Journalism/Publication",
+    "Junior R.O.T.C.",
+    "LGBT",
+    "Music: Instrumental",
+    "Music: Vocal",
+    "Religious",
+    "Research",
+    "Robotics",
+    "School Spirit",
+    "Science/Math",
+    "Social Justice",
+    "Student Govt./Politics",
+    "Theater/Drama",
+    "Work (Paid)",
+    "Other Club/Activity",
+)
+
+
+def _common_app_activity_type(achievement: Achievement, item: dict | None = None) -> str:
+    candidates = [
+        item.get("common_app_activity_type") if item else None,
+        achievement.category,
+        achievement.title,
+        achievement.organization_name,
+        achievement.role_title,
+        achievement.description_raw,
+    ]
+    compact_types = {option.lower(): option for option in COMMON_APP_ACTIVITY_TYPES}
+    for value in candidates:
+        cleaned = _clean_text(value).lower()
+        if cleaned in compact_types:
+            return compact_types[cleaned]
+    text = " ".join(_clean_text(value).lower() for value in candidates if value)
+    if any(word in text for word in ("robot", "robotics")):
+        return "Robotics"
+    if any(word in text for word in ("research", "paper", "publication", "conference")):
+        return "Research"
+    if any(word in text for word in ("computer", "technology", "programming", "python", "software", "website", "ai ", "full-stack", "coding")):
+        return "Computer/Technology"
+    if any(word in text for word in ("math", "science", "stem", "olympiad", "physics", "chemistry", "biology", "informatics")):
+        return "Science/Math"
+    if any(word in text for word in ("volunteer", "service", "mentor", "mentoring", "charity")):
+        return "Community Service (Volunteer)"
+    if any(word in text for word in ("intern", "internship")):
+        return "Internship"
+    if any(word in text for word in ("job", "paid", "work")):
+        return "Work (Paid)"
+    if "family" in text:
+        return "Family Responsibilities"
+    if any(word in text for word in ("debate", "speech", "mun", "model un")):
+        return "Debate/Speech"
+    if any(word in text for word in ("journal", "newspaper", "magazine", "article")):
+        return "Journalism/Publication"
+    if any(word in text for word in ("environment", "climate", "eco")):
+        return "Environmental"
+    if any(word in text for word in ("student government", "student council", "politics")):
+        return "Student Govt./Politics"
+    if any(word in text for word in ("music", "instrument", "piano", "violin")):
+        return "Music: Instrumental"
+    if any(word in text for word in ("vocal", "choir", "singing")):
+        return "Music: Vocal"
+    if any(word in text for word in ("dance",)):
+        return "Dance"
+    if any(word in text for word in ("theater", "theatre", "drama")):
+        return "Theater/Drama"
+    if any(word in text for word in ("art", "design", "drawing", "painting")):
+        return "Art"
+    if any(word in text for word in ("culture", "cultural")):
+        return "Cultural"
+    if any(word in text for word in ("language", "linguistic")):
+        return "Foreign Language"
+    if any(word in text for word in ("lgbt", "lgbtq")):
+        return "LGBT"
+    if any(word in text for word in ("religious", "religion")):
+        return "Religious"
+    if any(word in text for word in ("sport", "athletic", "football", "basketball", "swim", "varsity")):
+        return "Athletics: JV/Varsity"
+    return "Other Club/Activity"
 
 
 def _clean_text(value) -> str:
@@ -129,6 +223,9 @@ def _selection_from_parsed_item(
         "character_count": len(common_app_text),
         "common_app_position": common_app_position if achievement.type == AchievementType.activity else None,
         "common_app_organization": common_app_organization if achievement.type == AchievementType.activity else None,
+        "common_app_activity_type": (
+            _common_app_activity_type(achievement, item) if achievement.type == AchievementType.activity else None
+        ),
         "common_app_activity_description": (
             common_app_activity_description if achievement.type == AchievementType.activity else None
         ),
@@ -153,6 +250,7 @@ def _fallback_selection_from_achievement(achievement: Achievement, rank: int) ->
     fallback_item = {
         "common_app_position": achievement.role_title or achievement.title,
         "common_app_organization": achievement.organization_name or "",
+        "common_app_activity_type": _common_app_activity_type(achievement),
         "common_app_activity_description": achievement.description_raw or achievement.title,
         "common_app_honor_description": (
             f"{achievement.title}, {achievement.organization_name}"
@@ -338,42 +436,17 @@ def build_shortlist_from_current_vault(
             detail="Add at least one achievement before building a Common App shortlist.",
         )
 
-    raw_text = "\n\n".join(
-        _achievement_shortlist_block(index, achievement)
-        for index, achievement in enumerate(achievements, start=1)
-    )
-    parsed = parse_achievement_import(raw_text, current_user, payload.word_limit)
-    by_source_index = {
-        index: achievement
-        for index, achievement in enumerate(achievements, start=1)
-    }
-
     selected_activity_ids: set = set()
     selected_honor_ids: set = set()
-    activity_selection = _mapped_selection(
-        parsed.get("top_activities", []),
-        AchievementType.activity,
-        by_source_index,
-        selected_activity_ids,
-        TOP_ACTIVITY_LIMIT,
-    )
-    honor_selection = _mapped_selection(
-        parsed.get("top_honors", []),
-        AchievementType.honor,
-        by_source_index,
-        selected_honor_ids,
-        TOP_HONOR_LIMIT,
-    )
-
     activity_selection = _fill_selection_from_vault(
-        activity_selection,
+        [],
         achievements,
         AchievementType.activity,
         selected_activity_ids,
         TOP_ACTIVITY_LIMIT,
     )
     honor_selection = _fill_selection_from_vault(
-        honor_selection,
+        [],
         achievements,
         AchievementType.honor,
         selected_honor_ids,
@@ -415,21 +488,35 @@ def build_shortlist_from_current_vault(
             file_name="Current Vault",
             word_limit=payload.word_limit,
             imported_count=0,
-            strongest_angle=parsed["strongest_angle"],
-            needs_student_clarification=parsed.get("needs_student_clarification", False),
-            clarifying_questions=parsed.get("clarifying_questions", []),
-            additional_information_recommended=parsed.get("additional_information_recommended", False),
-            additional_information_reason=parsed.get("additional_information_reason") or None,
-            additional_information_draft=parsed.get("additional_information_draft") or None,
+            strongest_angle=(
+                "Use the highest-scoring sustained activities first, then support them with the strongest academic honors."
+            ),
+            needs_student_clarification=any(
+                item.get("missing_or_unclear_facts") for item in [*activity_selection, *honor_selection]
+            ),
+            clarifying_questions=[],
+            additional_information_recommended=False,
+            additional_information_reason=None,
+            additional_information_draft=None,
             formatting_notes=[
                 "Built from achievements already saved in the current vault.",
-                *parsed.get("formatting_notes", []),
+                "Common App activity fields use: Activity type, position/leadership <= 50 chars, organization <= 100 chars, description <= 150 chars.",
+                "Common App honors use one honor title/description field <= 100 chars.",
             ],
             extraction_notes=[
-                "No new achievements were imported; this pass only generated the shortlist.",
-                *parsed.get("extraction_notes", []),
+                "No new achievements were imported; this pass only generated the shortlist from saved vault entries.",
             ],
-            source_excerpts=parsed.get("source_excerpts", []),
+            source_excerpts=[
+                _truncate(
+                    " - ".join(
+                        _clean_text(value)
+                        for value in (achievement.title, achievement.organization_name, achievement.description_raw)
+                        if _clean_text(value)
+                    ),
+                    240,
+                )
+                for achievement in achievements[:8]
+            ],
             processing_steps=processing_steps,
             imported_achievements=[
                 AchievementOut.model_validate(achievement).model_dump()
@@ -576,6 +663,7 @@ async def import_all_achievements(
             "common_app_text": item["common_app_text"],
             "word_count": len(item["common_app_text"].split()),
             "character_count": len(item["common_app_text"]),
+            "common_app_activity_type": item.get("common_app_activity_type"),
             "common_app_position": item.get("common_app_position"),
             "common_app_organization": item.get("common_app_organization"),
             "common_app_activity_description": item.get("common_app_activity_description"),

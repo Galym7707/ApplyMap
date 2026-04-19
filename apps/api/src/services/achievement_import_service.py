@@ -19,6 +19,38 @@ COMMON_APP_ACTIVITY_POSITION_LIMIT = 50
 COMMON_APP_ACTIVITY_ORGANIZATION_LIMIT = 100
 COMMON_APP_ACTIVITY_DESCRIPTION_LIMIT = 150
 COMMON_APP_HONOR_DESCRIPTION_LIMIT = 100
+COMMON_APP_ACTIVITY_TYPES = (
+    "Academic",
+    "Art",
+    "Athletics: Club",
+    "Athletics: JV/Varsity",
+    "Career Oriented",
+    "Community Service (Volunteer)",
+    "Computer/Technology",
+    "Cultural",
+    "Dance",
+    "Debate/Speech",
+    "Environmental",
+    "Family Responsibilities",
+    "Foreign Exchange",
+    "Foreign Language",
+    "Internship",
+    "Journalism/Publication",
+    "Junior R.O.T.C.",
+    "LGBT",
+    "Music: Instrumental",
+    "Music: Vocal",
+    "Religious",
+    "Research",
+    "Robotics",
+    "School Spirit",
+    "Science/Math",
+    "Social Justice",
+    "Student Govt./Politics",
+    "Theater/Drama",
+    "Work (Paid)",
+    "Other Club/Activity",
+)
 
 IMPORT_SCHEMA = {
     "type": "object",
@@ -54,6 +86,7 @@ IMPORT_SCHEMA = {
                     "distinctiveness_score": {"type": "number"},
                     "selection_reason": {"type": "string"},
                     "common_app_text": {"type": "string"},
+                    "common_app_activity_type": {"type": ["string", "null"]},
                     "common_app_position": {"type": ["string", "null"]},
                     "common_app_organization": {"type": ["string", "null"]},
                     "common_app_activity_description": {"type": ["string", "null"]},
@@ -74,6 +107,7 @@ IMPORT_SCHEMA = {
                     "distinctiveness_score",
                     "selection_reason",
                     "common_app_text",
+                    "common_app_activity_type",
                     "common_app_position",
                     "common_app_organization",
                     "common_app_activity_description",
@@ -247,6 +281,68 @@ def _activity_organization(item: dict[str, Any]) -> str:
     return _truncate_characters(value, COMMON_APP_ACTIVITY_ORGANIZATION_LIMIT)
 
 
+def _activity_type(item: dict[str, Any]) -> str:
+    candidates = [
+        item.get("common_app_activity_type"),
+        item.get("category"),
+        item.get("title"),
+        item.get("organization_name"),
+        item.get("role_title"),
+        item.get("description_raw"),
+    ]
+    exact = {option.lower(): option for option in COMMON_APP_ACTIVITY_TYPES}
+    for value in candidates:
+        cleaned = _compact_whitespace(str(value or "")).lower()
+        if cleaned in exact:
+            return exact[cleaned]
+    text = " ".join(_compact_whitespace(str(value or "")).lower() for value in candidates if value)
+    if any(word in text for word in ("robot", "robotics")):
+        return "Robotics"
+    if any(word in text for word in ("research", "paper", "publication", "conference")):
+        return "Research"
+    if any(word in text for word in ("computer", "technology", "programming", "python", "software", "website", "ai ", "full-stack", "coding")):
+        return "Computer/Technology"
+    if any(word in text for word in ("math", "science", "stem", "olympiad", "physics", "chemistry", "biology", "informatics")):
+        return "Science/Math"
+    if any(word in text for word in ("volunteer", "service", "mentor", "mentoring", "charity")):
+        return "Community Service (Volunteer)"
+    if "intern" in text:
+        return "Internship"
+    if any(word in text for word in ("job", "paid", "work")):
+        return "Work (Paid)"
+    if "family" in text:
+        return "Family Responsibilities"
+    if any(word in text for word in ("debate", "speech", "mun", "model un")):
+        return "Debate/Speech"
+    if any(word in text for word in ("journal", "newspaper", "magazine", "article")):
+        return "Journalism/Publication"
+    if any(word in text for word in ("environment", "climate", "eco")):
+        return "Environmental"
+    if any(word in text for word in ("student government", "student council", "politics")):
+        return "Student Govt./Politics"
+    if any(word in text for word in ("music", "instrument", "piano", "violin")):
+        return "Music: Instrumental"
+    if any(word in text for word in ("vocal", "choir", "singing")):
+        return "Music: Vocal"
+    if "dance" in text:
+        return "Dance"
+    if any(word in text for word in ("theater", "theatre", "drama")):
+        return "Theater/Drama"
+    if any(word in text for word in ("art", "design", "drawing", "painting")):
+        return "Art"
+    if any(word in text for word in ("culture", "cultural")):
+        return "Cultural"
+    if any(word in text for word in ("language", "linguistic")):
+        return "Foreign Language"
+    if any(word in text for word in ("lgbt", "lgbtq")):
+        return "LGBT"
+    if "relig" in text:
+        return "Religious"
+    if any(word in text for word in ("sport", "athletic", "football", "basketball", "swim", "varsity")):
+        return "Athletics: JV/Varsity"
+    return "Other Club/Activity"
+
+
 def _activity_description(item: dict[str, Any], word_limit: int) -> str:
     value = _compact_whitespace(
         str(item.get("common_app_activity_description") or item.get("common_app_text") or item.get("description_raw") or "")
@@ -398,6 +494,7 @@ def _fallback_parse(raw_text: str, user: Optional[Any], word_limit: int) -> dict
             **base_item,
             **scores,
             "common_app_text": "",
+            "common_app_activity_type": _activity_type(base_item) if item_type == AchievementType.activity else None,
             "common_app_position": None,
             "common_app_organization": None,
             "common_app_activity_description": None,
@@ -463,7 +560,9 @@ def _import_prompt(
         "5. Recommend the strongest top 10 activities and top 5 academic honors for a Common App-style application. Use recommended_rank "
         "for selected items and null for the rest.\n"
         "6. For activities, fill separate Common App fields: common_app_position <= 50 characters, "
-        "common_app_organization <= 100 characters, and common_app_activity_description <= 150 characters. "
+        "common_app_organization <= 100 characters, common_app_activity_description <= 150 characters, and "
+        "common_app_activity_type as exactly one valid Common App option from this list: "
+        f"{', '.join(COMMON_APP_ACTIVITY_TYPES)}. "
         "Use the activity description for accomplishments and measurable impact, not role repetition.\n"
         "7. For honors, fill common_app_honor_description as one title/description block <= 100 characters.\n"
         "8. strongest_angle must explain the single best overall application angle in one sentence.\n"
@@ -679,6 +778,8 @@ def _normalize_items(result: dict[str, Any], word_limit: int) -> dict[str, Any]:
                 word_limit,
                 item_type.value,
             ),
+            "common_app_activity_type": _normalize_student_facing_text(str(raw_item.get("common_app_activity_type") or ""))
+            or None,
             "common_app_position": _normalize_student_facing_text(str(raw_item.get("common_app_position") or "")) or None,
             "common_app_organization": _normalize_student_facing_text(str(raw_item.get("common_app_organization") or "")) or None,
             "common_app_activity_description": _normalize_student_facing_text(
@@ -697,12 +798,14 @@ def _normalize_items(result: dict[str, Any], word_limit: int) -> dict[str, Any]:
         if not normalized["common_app_text"]:
             normalized["common_app_text"] = _fallback_common_app_text(normalized, word_limit)
         if item_type == AchievementType.activity:
+            normalized["common_app_activity_type"] = _activity_type(normalized)
             normalized["common_app_position"] = _activity_position(normalized)
             normalized["common_app_organization"] = _activity_organization(normalized) or None
             normalized["common_app_activity_description"] = _activity_description(normalized, word_limit)
             normalized["common_app_text"] = normalized["common_app_activity_description"]
             normalized["common_app_honor_description"] = None
         else:
+            normalized["common_app_activity_type"] = None
             normalized["common_app_honor_description"] = _honor_description(normalized, word_limit)
             normalized["common_app_text"] = normalized["common_app_honor_description"]
             normalized["common_app_position"] = None

@@ -95,6 +95,7 @@ export interface AchievementImportSelectionItem {
   character_count: number;
   common_app_position?: string;
   common_app_organization?: string;
+  common_app_activity_type?: string;
   common_app_activity_description?: string;
   common_app_honor_description?: string;
   position_character_count?: number;

@@ -87,6 +87,7 @@ class AchievementImportSelectionItem(BaseModel):
     character_count: int
     common_app_position: Optional[str] = None
     common_app_organization: Optional[str] = None
+    common_app_activity_type: Optional[str] = None
     common_app_activity_description: Optional[str] = None
     common_app_honor_description: Optional[str] = None
     position_character_count: Optional[int] = None

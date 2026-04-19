@@ -597,6 +597,22 @@ export default function VaultPage() {
     },
   });
 
+  const clearTypeMutation = useMutation({
+    mutationFn: async ({ ids }: { type: "activity" | "honor"; ids: string[] }) => {
+      await Promise.all(ids.map((id) => achievementsApi.delete(id)));
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["achievements"] });
+      clearImportAnalysis();
+      toast.success(
+        variables.type === "activity" ? "All activities cleared" : "All honors cleared"
+      );
+    },
+    onError: () => {
+      toast.error("Could not clear all items. Try again.");
+    },
+  });
+
   const importMutation = useMutation({
     mutationFn: ({
       file,
@@ -805,6 +821,23 @@ export default function VaultPage() {
     setEditing(a);
     setDefaultType(a.type);
     setModalOpen(true);
+  };
+
+  const handleClearAll = (type: "activity" | "honor") => {
+    const items = type === "activity" ? activities : honors;
+    if (items.length === 0) return;
+
+    const confirmed = window.confirm(
+      type === "activity"
+        ? `Delete all ${items.length} activities from your vault?`
+        : `Delete all ${items.length} honors from your vault?`
+    );
+    if (!confirmed) return;
+
+    clearTypeMutation.mutate({
+      type,
+      ids: items.map((item) => item.id),
+    });
   };
 
   const handleImportClick = () => {
@@ -1045,9 +1078,21 @@ export default function VaultPage() {
             <EmptyVaultState type="activity" onAdd={() => handleAdd("activity")} />
           ) : (
             <>
-              <p className="mb-3 text-xs text-slate-400">
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-slate-400">
                 Drag to reorder · Common App shows activities in this order
               </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full gap-1.5 border-red-200 text-red-600 hover:bg-red-50 sm:w-auto"
+                  onClick={() => handleClearAll("activity")}
+                  disabled={clearTypeMutation.isPending}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Clear all activities
+                </Button>
+              </div>
               <div className="space-y-2.5">
                 {sortedActivities.map((a, i) => (
                   <AchievementCard
@@ -1088,6 +1133,22 @@ export default function VaultPage() {
           ) : honors.length === 0 ? (
             <EmptyVaultState type="honor" onAdd={() => handleAdd("honor")} />
           ) : (
+            <>
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-slate-400">
+                  Academic honors stored in your vault
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full gap-1.5 border-red-200 text-red-600 hover:bg-red-50 sm:w-auto"
+                  onClick={() => handleClearAll("honor")}
+                  disabled={clearTypeMutation.isPending}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Clear all honors
+                </Button>
+              </div>
             <div className="space-y-2.5">
               {honors.map((a) => (
                 <AchievementCard
@@ -1098,6 +1159,7 @@ export default function VaultPage() {
                 />
               ))}
             </div>
+            </>
           )}
         </TabsContent>
       </Tabs>

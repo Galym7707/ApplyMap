@@ -133,6 +133,15 @@ function CommonAppField({
   );
 }
 
+function CommonAppStaticField({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="rounded-lg bg-white px-3 py-2">
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="text-sm leading-relaxed text-slate-800">{value || "Not enough information yet."}</p>
+    </div>
+  );
+}
+
 function getFallbackAnswerInputProps(question: string) {
   const normalized = question.toLowerCase();
   if (normalized.includes("start date")) {
@@ -435,6 +444,10 @@ function SelectionColumn({
 
               {item.type === "activity" ? (
                 <div className="space-y-2">
+                  <CommonAppStaticField
+                    label="Activity type"
+                    value={item.common_app_activity_type}
+                  />
                   <CommonAppField
                     label="Position / leadership"
                     value={item.common_app_position}
