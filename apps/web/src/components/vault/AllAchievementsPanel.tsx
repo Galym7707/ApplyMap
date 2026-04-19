@@ -789,6 +789,16 @@ export function AllAchievementsPanel({
               <p className="mt-2 text-sm leading-relaxed text-slate-500">
                 Upload a mixed achievement file or build a shortlist from the achievements already saved in your vault.
               </p>
+              {achievementCount > 0 && (
+                <Button
+                  className="mt-5 gap-2 bg-navy-950 text-white hover:bg-navy-900"
+                  onClick={onBuildFromVault}
+                  disabled={isWorking}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Build Top 10 Activities and Top 5 Honors
+                </Button>
+              )}
             </div>
           )}
         </>

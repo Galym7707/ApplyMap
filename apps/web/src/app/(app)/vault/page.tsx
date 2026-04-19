@@ -30,6 +30,8 @@ import type { Achievement, AchievementImportResult } from "@/types";
 
 const ACTIVITY_ORDER_STORAGE_KEY = "sourcelock_activity_order";
 const IMPORT_ANALYSIS_STORAGE_KEY = "applymap_all_import_analysis";
+const IMPORT_ANALYSIS_SIGNATURE_STORAGE_KEY = "applymap_all_import_analysis_signature";
+const AUTO_SHORTLIST_SIGNATURE_STORAGE_KEY = "applymap_auto_shortlist_signature";
 const TEXT_PREVIEW_EXTENSIONS = new Set(["txt", "md", "csv", "json"]);
 
 // ─── Form schema ────────────────────────────────────────────────────────────
@@ -550,6 +552,7 @@ export default function VaultPage() {
   const [importProgress, setImportProgress] = useState<ImportProgressState | null>(null);
   const [lastImportFile, setLastImportFile] = useState<File | null>(null);
   const [clarificationAnswers, setClarificationAnswers] = useState<ClarificationAnswers>({});
+  const [hasLoadedStoredAnalysis, setHasLoadedStoredAnalysis] = useState(false);
 
   // Drag state
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -565,6 +568,14 @@ export default function VaultPage() {
   const achievements: Achievement[] = data?.data?.data ?? [];
   const activities = achievements.filter((a) => a.type === "activity");
   const honors = achievements.filter((a) => a.type === "honor");
+  const vaultSignature = useMemo(
+    () =>
+      achievements
+        .map((achievement) => `${achievement.id}:${achievement.updated_at}`)
+        .sort()
+        .join("|"),
+    [achievements]
+  );
 
   const clearImportAnalysis = () => {
     setAllImportResult(null);
@@ -573,6 +584,7 @@ export default function VaultPage() {
     setClarificationAnswers({});
     try {
       localStorage.removeItem(IMPORT_ANALYSIS_STORAGE_KEY);
+      localStorage.removeItem(IMPORT_ANALYSIS_SIGNATURE_STORAGE_KEY);
     } catch {}
   };
 
@@ -610,6 +622,7 @@ export default function VaultPage() {
 
       try {
         localStorage.setItem(IMPORT_ANALYSIS_STORAGE_KEY, JSON.stringify(result));
+        localStorage.removeItem(IMPORT_ANALYSIS_SIGNATURE_STORAGE_KEY);
       } catch {}
 
       const reorderedActivityIds = [
@@ -650,6 +663,7 @@ export default function VaultPage() {
 
       try {
         localStorage.setItem(IMPORT_ANALYSIS_STORAGE_KEY, JSON.stringify(result));
+        localStorage.setItem(IMPORT_ANALYSIS_SIGNATURE_STORAGE_KEY, vaultSignature);
       } catch {}
 
       const reorderedActivityIds = [
@@ -709,6 +723,7 @@ export default function VaultPage() {
         setAllImportResult(JSON.parse(storedAnalysis) as AchievementImportResult);
       }
     } catch {}
+    setHasLoadedStoredAnalysis(true);
   }, []);
 
   // Keep order in sync: new items appended, deleted items removed
@@ -721,6 +736,25 @@ export default function VaultPage() {
       return [...kept, ...added];
     });
   }, [activities]);
+
+  useEffect(() => {
+    if (
+      !hasLoadedStoredAnalysis ||
+      !vaultSignature ||
+      !allImportResult ||
+      allImportResult.file_name !== "Current Vault"
+    ) {
+      return;
+    }
+
+    try {
+      const storedSignature = localStorage.getItem(IMPORT_ANALYSIS_SIGNATURE_STORAGE_KEY);
+      if (storedSignature && storedSignature !== vaultSignature) {
+        clearImportAnalysis();
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLoadedStoredAnalysis, vaultSignature, allImportResult]);
 
   const sortedActivities = useMemo(() => {
     if (activityOrder.length === 0) return activities;
@@ -881,6 +915,28 @@ export default function VaultPage() {
 
     shortlistMutation.mutate(parsedLimit);
   };
+
+  useEffect(() => {
+    if (
+      !hasLoadedStoredAnalysis ||
+      !vaultSignature ||
+      allImportResult ||
+      isAnalyzing ||
+      achievements.length === 0
+    ) {
+      return;
+    }
+
+    try {
+      if (sessionStorage.getItem(AUTO_SHORTLIST_SIGNATURE_STORAGE_KEY) === vaultSignature) {
+        return;
+      }
+      sessionStorage.setItem(AUTO_SHORTLIST_SIGNATURE_STORAGE_KEY, vaultSignature);
+    } catch {}
+
+    handleBuildFromVault();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLoadedStoredAnalysis, vaultSignature, allImportResult, isAnalyzing, achievements.length]);
 
   return (
     <div className="w-full max-w-none p-6 lg:p-8">

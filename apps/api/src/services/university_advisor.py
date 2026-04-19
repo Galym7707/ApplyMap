@@ -1,5 +1,6 @@
 import json
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from urllib.parse import urlparse
@@ -62,6 +63,8 @@ ADVISOR_SCHEMA = {
     ],
 }
 
+SEARCH_TIME_BUDGET_SECONDS = 16.0
+
 KAZAKHSTAN_FINAL_CREDENTIAL_PHRASES = (
     "nis grade 12 certificate",
     "grade 12 certificate",
@@ -121,7 +124,7 @@ def _google_search(query: str, *, num: int = 5) -> list[dict[str, str]]:
     if not api_key or not engine_id:
         raise SearchNotConfiguredError("Google Custom Search is not configured")
 
-    with httpx.Client(timeout=12.0) as client:
+    with httpx.Client(timeout=8.0) as client:
         response = client.get(
             "https://www.googleapis.com/customsearch/v1",
             params={
@@ -155,7 +158,7 @@ def _resolve_redirect_url(url: str) -> str:
         return url
 
     try:
-        with httpx.Client(timeout=8.0, follow_redirects=True) as client:
+        with httpx.Client(timeout=3.0, follow_redirects=True) as client:
             response = client.head(url)
             if response.status_code >= 400 or str(response.url) == url:
                 response = client.get(url)
@@ -190,7 +193,7 @@ def _gemini_grounded_search(query: str, *, num: int = 5) -> list[dict[str, str]]
         "generationConfig": {"temperature": 0.0},
     }
 
-    with httpx.Client(timeout=30.0) as client:
+    with httpx.Client(timeout=16.0) as client:
         response = client.post(
             url,
             headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
@@ -357,18 +360,20 @@ def search_university_sources(university_name: str, intended_major: str | None =
     queries = [
         (
             f"{university_name} official undergraduate admissions international students requirements "
-            f"scholarships financial aid research summer programs {major}"
+            f"application deadlines standardized testing financial aid {major}"
         ),
-        f"{university_name} official undergraduate admissions international students requirements",
         f"{university_name} official scholarships financial aid international students",
-        f"{university_name} official English taught programs {major}",
+        f"{university_name} official undergraduate admissions international students requirements",
         f"{university_name} official research summer programs high school students {major}",
     ]
 
+    deadline = time.monotonic() + SEARCH_TIME_BUDGET_SECONDS
     seen: set[str] = set()
     results: list[dict[str, str]] = []
     for query_index, query in enumerate(queries):
-        request_count = 8 if query_index == 0 else 5
+        if time.monotonic() >= deadline and results:
+            break
+        request_count = 5 if query_index == 0 else 4
         for item in _search_web(query, num=request_count):
             url = item["url"]
             if url in seen:
@@ -397,7 +402,7 @@ def search_university_sources(university_name: str, intended_major: str | None =
                 if result["source_tier"] == "official"
             ]
         )
-        if len(results) >= 18 or official_count >= 6:
+        if len(results) >= 8 or official_count >= 2:
             break
 
     tier_priority = {
@@ -546,7 +551,7 @@ def generate_university_action_plan(
     }
 
     try:
-        with httpx.Client(timeout=25.0) as client:
+        with httpx.Client(timeout=16.0) as client:
             response = client.post(
                 url,
                 headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
