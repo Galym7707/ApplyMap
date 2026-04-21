@@ -54,6 +54,17 @@ COMMON_APP_ACTIVITY_TYPES = (
     "Work (Paid)",
     "Other Club/Activity",
 )
+COMMON_APP_CLASSIFICATION_GUIDE = """
+Common App classification rules:
+- Honor = result or recognition: medal, rank, prize, finalist/semifinalist, scholarship by merit, subject distinction, academic award.
+- Activity = process or contribution: role, responsibility, sustained work, project, research process, tutoring, volunteering, work, family responsibility, leadership.
+- If a line only says the student won/placed/finaled in a competition, classify it as honor, not activity.
+- If the same story belongs in both sections, do not duplicate wording. Honors should state the award formally; Activities should explain the work, role, scale, time, contribution, and impact behind it.
+- For honors, use: year + award title + context + grade if known + level (School/Regional/National/International).
+- For activities, use: action verb + what the student did + audience/scale + measurable result; mention an award only briefly if it adds new context.
+- Add numbers whenever they are supported by the source or public verification: year, grade, placement, participant/team count, selection rate, users served, hours/week, weeks/year.
+- Do not invent numbers. If public search does not confirm a number, ask for it in missing_or_unclear_facts instead of writing it as fact.
+""".strip()
 
 IMPORT_SCHEMA = {
     "type": "object",
@@ -147,6 +158,10 @@ HONOR_KEYWORDS = (
     "olympiad",
     "scholarship",
     "finalist",
+    "semifinalist",
+    "semi-finalist",
+    "place",
+    "rank",
     "laureate",
     "distinction",
     "champion",
@@ -334,6 +349,130 @@ def _clean_string_list(value: Any, *, max_items: int = 6, max_chars: int = 260) 
     return strings
 
 
+HONOR_SIGNAL_KEYWORDS = (
+    "award",
+    "bronze",
+    "silver",
+    "gold",
+    "medal",
+    "winner",
+    "won",
+    "1st place",
+    "2nd place",
+    "3rd place",
+    "first place",
+    "second place",
+    "third place",
+    "prize",
+    "finalist",
+    "semifinalist",
+    "semi-finalist",
+    "rank",
+    "top ",
+    "distinction",
+    "honor",
+    "scholarship",
+)
+
+ACTIVITY_PROCESS_KEYWORDS = (
+    "built",
+    "created",
+    "developed",
+    "designed",
+    "founded",
+    "led",
+    "organized",
+    "coordinated",
+    "taught",
+    "mentored",
+    "tutored",
+    "volunteered",
+    "served",
+    "worked",
+    "interned",
+    "conducted",
+    "researched",
+    "analyzed",
+    "wrote",
+    "published",
+    "presented",
+    "trained",
+    "coached",
+    "managed",
+    "launched",
+    "maintained",
+    "onboarded",
+    "raised",
+    "improved",
+)
+
+
+def _contains_keyword(value: str, keywords: tuple[str, ...]) -> bool:
+    text = value.lower()
+    return any(keyword in text for keyword in keywords)
+
+
+def _looks_like_award_only_activity(item: dict[str, Any]) -> bool:
+    text = " ".join(
+        _compact_whitespace(str(item.get(key) or ""))
+        for key in (
+            "title",
+            "description_raw",
+            "common_app_text",
+            "common_app_activity_description",
+            "common_app_position",
+        )
+    )
+    lower = text.lower()
+    has_honor_signal = _contains_keyword(lower, HONOR_SIGNAL_KEYWORDS) or bool(
+        re.search(r"\b\d+(?:st|nd|rd|th)\s+(?:place|rank)\b", lower)
+    )
+    if not has_honor_signal:
+        return False
+
+    has_process_signal = _contains_keyword(lower, ACTIVITY_PROCESS_KEYWORDS)
+    has_time_commitment = item.get("hours_per_week") is not None or item.get("weeks_per_year") is not None
+    role = _compact_whitespace(str(item.get("role_title") or item.get("common_app_position") or ""))
+    organization = _compact_whitespace(str(item.get("organization_name") or item.get("common_app_organization") or ""))
+    has_real_role = bool(role) and not _contains_keyword(role, HONOR_SIGNAL_KEYWORDS)
+    has_real_org = bool(organization) and organization.lower() not in {"not enough information yet", "unknown", "n/a"}
+    return not (has_process_signal or has_time_commitment or has_real_role or has_real_org)
+
+
+def _format_honor_year_first(value: str) -> str:
+    text = _compact_whitespace(value)
+    grade_match = re.match(r"^(9|10|11|12)\)\s+(.+)$", text)
+    grade_suffix = ""
+    if grade_match:
+        grade_suffix = f", Grade {grade_match.group(1)}"
+        text = grade_match.group(2)
+    year_match = re.search(r"\b(20\d{2}|19\d{2})\b", text)
+    if not year_match:
+        return _compact_whitespace(f"{text}{grade_suffix}")
+    if text.startswith(year_match.group(1)):
+        return _compact_whitespace(f"{text}{grade_suffix}")
+    year = year_match.group(1)
+    without_year = _compact_whitespace((text[: year_match.start()] + text[year_match.end() :]).strip(" ,;:-()"))
+    return _compact_whitespace(f"{year} {without_year}{grade_suffix}")
+
+
+def _append_honor_level(value: str, impact_scope: Any) -> str:
+    text = _compact_whitespace(value)
+    level = getattr(impact_scope, "value", impact_scope)
+    if level not in {
+        ImpactScope.school.value,
+        ImpactScope.local.value,
+        ImpactScope.regional.value,
+        ImpactScope.national.value,
+        ImpactScope.international.value,
+    }:
+        return text
+    label = "State/Regional" if level in {ImpactScope.local.value, ImpactScope.regional.value} else str(level).title()
+    if label.lower() in text.lower():
+        return text
+    return _compact_whitespace(f"{text}, {label}")
+
+
 def _enforce_common_app_limit(value: str, word_limit: int, achievement_type: str) -> str:
     words = _compact_whitespace(value).split()
     if word_limit > 0 and len(words) > word_limit:
@@ -428,8 +567,15 @@ def _activity_description(item: dict[str, Any], word_limit: int) -> str:
 
 def _honor_description(item: dict[str, Any], word_limit: int) -> str:
     value = _compact_whitespace(
-        str(item.get("common_app_honor_description") or item.get("common_app_text") or item.get("title") or "")
+        str(
+            item.get("common_app_honor_description")
+            or item.get("description_raw")
+            or item.get("common_app_text")
+            or item.get("title")
+            or ""
+        )
     )
+    value = _append_honor_level(_format_honor_year_first(value), item.get("impact_scope"))
     return _enforce_common_app_limit(value, word_limit, AchievementType.honor.value)
 
 
@@ -646,6 +792,7 @@ def _import_prompt(
             "honors_max_items": MAX_TOP_HONORS,
             "honor_title_description_chars": COMMON_APP_HONOR_DESCRIPTION_LIMIT,
         },
+        "common_app_classification_guide": COMMON_APP_CLASSIFICATION_GUIDE,
         "source_excerpts": _source_excerpts(raw_text),
         "student_clarification_answers": clarification_answers or {},
         "raw_source_text": raw_text,
@@ -656,7 +803,8 @@ def _import_prompt(
         f"{CHANCELLOR_COUNSELOR_FRAMEWORK}\n\n"
         "Tasks:\n"
         "1. Extract every distinct student achievement from the raw text before ranking. Merge only true duplicates.\n"
-        "2. Classify each item as either 'activity' or 'honor'.\n"
+        "2. Classify each item as either 'activity' or 'honor' using the supplied Common App classification guide. "
+        "Honor means result/recognition; activity means process/role/contribution. Do not turn award-only evidence into an activity.\n"
         "3. Fill structured fields conservatively. If a field is missing, use null instead of inventing facts.\n"
         "4. Score each item from 0 to 10 on major_relevance_score, selectivity_score, continuity_score, and distinctiveness_score.\n"
         "5. Recommend the strongest top 10 activities and top 5 academic honors for a Common App-style application. Use recommended_rank "
@@ -666,7 +814,8 @@ def _import_prompt(
         "common_app_activity_type as exactly one valid Common App option from this list: "
         f"{', '.join(COMMON_APP_ACTIVITY_TYPES)}. "
         "Use the activity description for accomplishments and measurable impact, not role repetition.\n"
-        "7. For honors, fill common_app_honor_description as one title/description block <= 100 characters.\n"
+        "7. For honors, fill common_app_honor_description as one title/description block <= 100 characters. Start with the year "
+        "when known, then the award title, context, grade if known, and recognition level.\n"
         "8. strongest_angle must explain the single best overall application angle in one sentence.\n"
         "9. If there are inconsistencies in years, roles, award level, school grade, hours, or metrics, set "
         "needs_student_clarification=true and write short clarifying_questions before the student should trust final wording.\n"
@@ -697,6 +846,10 @@ def _import_prompt(
         "ask for the target portal if the limit is unclear.\n"
         "- Apply the College Essay Guy-style approach: active verbs, measurable impact, no filler, no repeated role wording, "
         "selectivity where supported, and abbreviations only when they improve clarity.\n"
+        "- Add supported numbers wherever useful: year, grade, placement, participant/team count, selection rate, users served, "
+        "hours/week, weeks/year, countries, or funding. Use public verification only when the source supports it; otherwise ask.\n"
+        "- If an award and an activity share one story, the honor line must capture recognition and the activity line must capture "
+        "the work behind it. Never copy the same wording into both sections.\n"
         "- If the student omits participant counts, selection rates, dates, or exact award level, add those to "
         "missing_or_unclear_facts and propose verification_queries. Do not fabricate counts.\n"
         "- The shortlist should reward spike, depth, selectivity, continuity, and distinctive impact.\n"
@@ -897,6 +1050,15 @@ def _normalize_items(result: dict[str, Any], word_limit: int) -> dict[str, Any]:
             ),
             "recommended_rank": raw_item.get("recommended_rank"),
         }
+        if item_type == AchievementType.activity and _looks_like_award_only_activity(normalized):
+            item_type = AchievementType.honor
+            normalized["type"] = AchievementType.honor.value
+            normalized["selection_reason"] = _compact_whitespace(
+                f"{normalized['selection_reason']} Reclassified as honor because the evidence describes recognition, not a sustained role."
+            )
+            normalized["missing_or_unclear_facts"].append(
+                "If this award came from a long activity, add the activity separately with role, hours, weeks, and impact."
+            )
         if not normalized["common_app_text"]:
             normalized["common_app_text"] = _fallback_common_app_text(normalized, word_limit)
         if item_type == AchievementType.activity:
