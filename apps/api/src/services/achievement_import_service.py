@@ -11,6 +11,9 @@ from .counselor_knowledge import CHANCELLOR_COUNSELOR_FRAMEWORK
 
 MAX_IMPORT_BYTES = 10_000_000
 MAX_IMPORT_CHARS = 80_000
+MAX_PDF_PAGES = 25
+MAX_DOCX_PARAGRAPHS = 2500
+AI_IMPORT_MAX_CHARS = 24_000
 DEFAULT_WORD_LIMIT = 22
 MAX_IMPORTED_ITEMS = 60
 MAX_TOP_ACTIVITIES = 10
@@ -232,6 +235,77 @@ def _source_excerpts(raw_text: str, *, max_items: int = 8, max_chars: int = 240)
     return [text for _, _, text in scored[:max_items]]
 
 
+def _prepare_ai_import_text(raw_text: str) -> str:
+    if len(raw_text) <= AI_IMPORT_MAX_CHARS:
+        return raw_text
+
+    keywords = (
+        "award",
+        "winner",
+        "honor",
+        "activities",
+        "president",
+        "captain",
+        "founder",
+        "research",
+        "olympiad",
+        "competition",
+        "volunteer",
+        "raised",
+        "published",
+        "selected",
+        "national",
+        "international",
+        "grade",
+        "202",
+        "hr/wk",
+        "wk/yr",
+        "участ",
+        "побед",
+        "приз",
+        "олимпиад",
+        "конкурс",
+        "волонтер",
+        "волонтёр",
+        "финал",
+        "место",
+        "жүлде",
+        "жеңімпаз",
+    )
+    chunks: list[str] = []
+    for chunk in re.split(r"(?:\n\s*){1,}|(?:\s*[•\u2022*]\s+)", raw_text):
+        text = _compact_whitespace(chunk)
+        if len(text) >= 14:
+            chunks.append(text)
+
+    scored: list[tuple[int, int, str]] = []
+    for index, chunk in enumerate(chunks):
+        lower = chunk.lower()
+        score = sum(2 for keyword in keywords if keyword in lower)
+        if any(char.isdigit() for char in chunk):
+            score += 1
+        if len(chunk) > 400:
+            score -= 1
+        scored.append((score, index, chunk))
+
+    selected: list[tuple[int, str]] = []
+    total_chars = 0
+    for score, index, chunk in sorted(scored, key=lambda item: (-item[0], item[1])):
+        if score <= 0 and total_chars > AI_IMPORT_MAX_CHARS // 2:
+            continue
+        candidate = _truncate_characters(chunk, 900)
+        if total_chars + len(candidate) + 1 > AI_IMPORT_MAX_CHARS:
+            continue
+        selected.append((index, candidate))
+        total_chars += len(candidate) + 1
+        if len(selected) >= MAX_IMPORTED_ITEMS * 3:
+            break
+
+    selected.sort(key=lambda item: item[0])
+    prepared = "\n".join(chunk for _, chunk in selected).strip()
+    return prepared or raw_text[:AI_IMPORT_MAX_CHARS]
+
+
 def _count_words(value: str) -> int:
     return len(re.findall(r"\b[\w'-]+\b", value))
 
@@ -384,12 +458,27 @@ def _extract_pdf_text(raw_bytes: bytes) -> str:
         raise ValueError("PDF support requires pdfplumber. Run: pip install pdfplumber")
 
     pages_text: list[str] = []
-    with pdfplumber.open(io.BytesIO(raw_bytes)) as pdf:
-        for page in pdf.pages:
-            page_text = page.extract_text() or ""
-            if page_text.strip():
-                pages_text.append(page_text)
-    return "\n".join(pages_text)
+    try:
+        with pdfplumber.open(io.BytesIO(raw_bytes)) as pdf:
+            for index, page in enumerate(pdf.pages):
+                if index >= MAX_PDF_PAGES:
+                    break
+                page_text = page.extract_text() or ""
+                if page_text.strip():
+                    pages_text.append(page_text)
+                if sum(len(text) for text in pages_text) >= MAX_IMPORT_CHARS:
+                    break
+    except Exception as exc:
+        raise ValueError(
+            "Could not extract text from this PDF. Upload a selectable-text PDF, DOCX, TXT, MD, CSV, or JSON file."
+        ) from exc
+
+    text = "\n".join(pages_text)
+    if not _compact_whitespace(text):
+        raise ValueError(
+            "This PDF has no selectable text. Scanned image PDFs are not supported yet; upload a text-based PDF, DOCX, TXT, MD, CSV, or JSON file."
+        )
+    return text[:MAX_IMPORT_CHARS]
 
 
 def _extract_docx_text(raw_bytes: bytes) -> str:
@@ -400,9 +489,22 @@ def _extract_docx_text(raw_bytes: bytes) -> str:
     except ImportError:
         raise ValueError("DOCX support requires python-docx. Run: pip install python-docx")
 
-    doc = Document(io.BytesIO(raw_bytes))
-    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-    return "\n".join(paragraphs)
+    try:
+        doc = Document(io.BytesIO(raw_bytes))
+        paragraphs: list[str] = []
+        total_chars = 0
+        for paragraph in doc.paragraphs[:MAX_DOCX_PARAGRAPHS]:
+            text = paragraph.text.strip()
+            if not text:
+                continue
+            paragraphs.append(text)
+            total_chars += len(text) + 1
+            if total_chars >= MAX_IMPORT_CHARS:
+                break
+    except Exception as exc:
+        raise ValueError("Could not extract text from this DOCX file. Export it as TXT or a simpler DOCX and retry.") from exc
+
+    return "\n".join(paragraphs)[:MAX_IMPORT_CHARS]
 
 
 def decode_import_file(file_name: str, raw_bytes: bytes) -> str:
@@ -832,10 +934,11 @@ def parse_achievement_import(
     word_limit: int,
     clarification_answers: Optional[dict[str, str]] = None,
 ) -> dict[str, Any]:
-    parsed = _gemini_parse(raw_text, user, word_limit, clarification_answers)
+    ai_text = _prepare_ai_import_text(raw_text)
+    parsed = _gemini_parse(ai_text, user, word_limit, clarification_answers)
     used_gemini = parsed is not None
     if parsed is None:
-        parsed = _fallback_parse(raw_text, user, word_limit)
+        parsed = _fallback_parse(ai_text, user, word_limit)
     normalized = _normalize_items(parsed, word_limit)
     items = normalized["items"]
 
@@ -892,6 +995,12 @@ def parse_achievement_import(
             "label": "Read uploaded file",
             "status": "complete",
             "detail": f"Extracted {len(raw_text):,} characters while preserving line breaks and bullet structure.",
+        },
+        {
+            "key": "prepare_ai_input",
+            "label": "Prepare text for AI review",
+            "status": "complete",
+            "detail": f"Focused the AI review on {len(ai_text):,} relevant characters to keep the import stable.",
         },
         {
             "key": "extract_candidates",

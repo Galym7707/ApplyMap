@@ -63,7 +63,7 @@ ADVISOR_SCHEMA = {
     ],
 }
 
-SEARCH_TIME_BUDGET_SECONDS = 16.0
+SEARCH_TIME_BUDGET_SECONDS = 22.0
 
 KAZAKHSTAN_FINAL_CREDENTIAL_PHRASES = (
     "nis grade 12 certificate",
@@ -360,11 +360,13 @@ def search_university_sources(university_name: str, intended_major: str | None =
     queries = [
         (
             f"{university_name} official undergraduate admissions international students requirements "
-            f"application deadlines standardized testing financial aid {major}"
+            f"application deadlines standardized testing {major}"
         ),
-        f"{university_name} official scholarships financial aid international students",
-        f"{university_name} official undergraduate admissions international students requirements",
-        f"{university_name} official research summer programs high school students {major}",
+        f"{university_name} official scholarships financial aid international undergraduate students",
+        f"{university_name} official {major} undergraduate department research opportunities",
+        f"{university_name} official summer programs high school students {major}",
+        f"{university_name} official pre-collegiate summer program high school students",
+        f"{university_name} official outreach programs high school students {major}",
     ]
 
     deadline = time.monotonic() + SEARCH_TIME_BUDGET_SECONDS
@@ -373,7 +375,7 @@ def search_university_sources(university_name: str, intended_major: str | None =
     for query_index, query in enumerate(queries):
         if time.monotonic() >= deadline and results:
             break
-        request_count = 5 if query_index == 0 else 4
+        request_count = 5 if query_index < 2 else 6
         for item in _search_web(query, num=request_count):
             url = item["url"]
             if url in seen:
@@ -386,23 +388,9 @@ def search_university_sources(university_name: str, intended_major: str | None =
                     "source_tier": _source_tier(url, university_name, item.get("title", "")),
                 }
             )
-            official_count = len(
-                [
-                    result
-                    for result in results
-                    if result["source_tier"] == "official"
-                ]
-            )
-            if len(results) >= 18 or official_count >= 6:
+            if len(results) >= 24:
                 break
-        official_count = len(
-            [
-                result
-                for result in results
-                if result["source_tier"] == "official"
-            ]
-        )
-        if len(results) >= 8 or official_count >= 2:
+        if len(results) >= 24:
             break
 
     tier_priority = {
@@ -412,7 +400,14 @@ def search_university_sources(university_name: str, intended_major: str | None =
         "third_party": 3,
     }
     results.sort(key=lambda item: tier_priority.get(item["source_tier"], 9))
-    return results[:12]
+    official_or_education = [
+        item
+        for item in results
+        if item["source_tier"] in {"official", "likely_official", "education_domain"}
+    ]
+    if len(official_or_education) >= 4:
+        return official_or_education[:16]
+    return results[:16]
 
 
 def _profile_payload(user: Any) -> dict[str, Any]:
@@ -456,6 +451,103 @@ def _achievement_payload(achievements: list[Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _truncate_text(value: Any, limit: int) -> str:
+    text = _compact(str(value or ""))
+    if len(text) <= limit:
+        return text
+    truncated = text[:limit]
+    last_space = truncated.rfind(" ")
+    if last_space > max(0, limit - 30):
+        truncated = truncated[:last_space]
+    return truncated.rstrip(" ,.;:")
+
+
+def _is_generic_program_name(name: str) -> bool:
+    normalized = name.lower().strip()
+    generic_names = {
+        "research opportunities",
+        "summer programs",
+        "internships",
+        "summer internships",
+        "research or summer programs",
+        "high school summer programs",
+        "official summer programs",
+    }
+    return (
+        normalized in generic_names
+        or normalized.startswith("seek ")
+        or normalized.startswith("find ")
+        or "cannot be confirmed" in normalized
+        or "not confirmed" in normalized
+    )
+
+
+def _normalize_advisor_plan(plan: dict[str, Any]) -> dict[str, Any]:
+    normalized: dict[str, Any] = {
+        "summary": _truncate_text(plan.get("summary"), 160),
+        "exams_to_prioritize": [],
+        "profile_actions": [],
+        "low_value_activities": [],
+        "research_or_summer_programs": [],
+        "source_notes": [],
+    }
+
+    for item in plan.get("exams_to_prioritize") or []:
+        if not isinstance(item, dict):
+            continue
+        exam = _truncate_text(item.get("exam"), 80)
+        why = _truncate_text(item.get("why"), 190)
+        priority = str(item.get("priority") or "medium").lower()
+        if priority not in {"high", "medium", "low"}:
+            priority = "medium"
+        if exam and why:
+            normalized["exams_to_prioritize"].append(
+                {"exam": exam, "why": why, "priority": priority}
+            )
+        if len(normalized["exams_to_prioritize"]) >= 5:
+            break
+
+    for key, limit, max_items in (
+        ("profile_actions", 210, 7),
+        ("low_value_activities", 180, 5),
+        ("source_notes", 220, 5),
+    ):
+        seen: set[str] = set()
+        for item in plan.get(key) or []:
+            text = _truncate_text(item, limit)
+            if text and text not in seen:
+                normalized[key].append(text)
+                seen.add(text)
+            if len(normalized[key]) >= max_items:
+                break
+
+    program_seen: set[str] = set()
+    for item in plan.get("research_or_summer_programs") or []:
+        if not isinstance(item, dict):
+            continue
+        name = _truncate_text(item.get("name"), 110)
+        if not name or _is_generic_program_name(name) or name in program_seen:
+            continue
+        program = {
+            "name": name,
+            "why_it_helps": _truncate_text(item.get("why_it_helps"), 210),
+        }
+        source_url = _compact(str(item.get("source_url") or ""))
+        if source_url.startswith(("http://", "https://")):
+            program["source_url"] = source_url
+        normalized["research_or_summer_programs"].append(program)
+        program_seen.add(name)
+        if len(normalized["research_or_summer_programs"]) >= 8:
+            break
+
+    if not normalized["research_or_summer_programs"]:
+        _append_unique(
+            normalized["source_notes"],
+            "No exact named research or summer program was confirmed from the current official sources.",
+        )
+    return normalized
+
+
 def _prompt(
     *,
     university_name: str,
@@ -479,10 +571,19 @@ def _prompt(
         "to NIS Grade 12 Certificate in English.\n\n"
         f"{ADMISSIONS_FRAMEWORK}\n\n"
         f"{CHANCELLOR_COUNSELOR_FRAMEWORK}\n\n"
-        "Be direct. Avoid motivational filler. Identify exams that could materially improve the application, "
-        "activities that are low-value for this target, and research or summer programs only when they appear "
-        "in the supplied source results. If web_search_results is empty, say current university facts cannot "
-        "be confirmed and give only general next steps that do not depend on current requirements.\n\n"
+        "Be direct. Do not write a portfolio analysis paragraph. Return a practical plan the student can act on. "
+        "Keep summary under 160 characters. Keep every why/action under 210 characters. Identify exams that could "
+        "materially improve the application, activities that are low-value for this target, and exact research, "
+        "summer, pre-collegiate, outreach, or department program names only when they appear in the supplied source "
+        "results. Never write generic items like 'seek internships', 'find research', or 'summer programs'. Name the "
+        "actual program and include source_url when the source result gives one. If no exact program name is supported, "
+        "return an empty research_or_summer_programs array and one short source_note. Do not make the student search manually.\n\n"
+        "Output rules:\n"
+        "- exams_to_prioritize: max 5. Only tests or exam-like requirements, not long transcript commentary.\n"
+        "- profile_actions: max 7. Concrete next moves, not broad advice.\n"
+        "- low_value_activities: max 5. Say what to stop or avoid for this exact target.\n"
+        "- research_or_summer_programs: max 8 exact named programs with concise relevance.\n"
+        "- source_notes: only warnings about source limits or timeline corrections. Do not paste links as advice.\n\n"
         "Critical Kazakhstan timeline rules:\n"
         "- For U.S. fall applications, do not list final UNT/ENT, final MESK/NIS Grade 12 Certificate, or final Grade 12 "
         "GPA as high/medium exams to prioritize unless the target's official source explicitly allows that for the "
@@ -561,10 +662,12 @@ def generate_university_action_plan(
         plan = json.loads(_extract_text(response.json()))
         if not isinstance(plan, dict):
             raise ValueError("Advisor response was not a JSON object")
-        return _sanitize_application_timeline(
-            plan,
-            university_name=university_name,
-            search_results=search_results,
+        return _normalize_advisor_plan(
+            _sanitize_application_timeline(
+                plan,
+                university_name=university_name,
+                search_results=search_results,
+            )
         )
     except (httpx.HTTPError, json.JSONDecodeError, KeyError, TypeError, ValueError):
         return {

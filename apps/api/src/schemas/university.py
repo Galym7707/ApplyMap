@@ -166,7 +166,7 @@ class CommonAppRecommendationRequest(BaseModel):
 
 class UniversityAdvisorRequest(BaseModel):
     university_name: str = Field(min_length=2, max_length=255)
-    intended_major: Optional[str] = None
+    intended_major: str = Field(min_length=2, max_length=255)
 
 
 class CommonAppRecommendationOut(BaseModel):

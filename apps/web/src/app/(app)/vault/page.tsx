@@ -34,6 +34,7 @@ const IMPORT_ANALYSIS_STORAGE_KEY = "applymap_all_import_analysis_v3";
 const IMPORT_ANALYSIS_SIGNATURE_STORAGE_KEY = "applymap_all_import_analysis_signature_v3";
 const AUTO_SHORTLIST_SIGNATURE_STORAGE_KEY = "applymap_auto_shortlist_signature_v3";
 const TEXT_PREVIEW_EXTENSIONS = new Set(["txt", "md", "csv", "json"]);
+const DEFAULT_IMPORT_WORD_LIMIT = 22;
 
 // ─── Form schema ────────────────────────────────────────────────────────────
 
@@ -548,7 +549,6 @@ export default function VaultPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Achievement | undefined>();
   const [defaultType, setDefaultType] = useState<"activity" | "honor">("activity");
-  const [wordLimit, setWordLimit] = useState("22");
   const [allImportResult, setAllImportResult] = useState<AchievementImportResult | null>(null);
   const [importProgress, setImportProgress] = useState<ImportProgressState | null>(null);
   const [lastImportFile, setLastImportFile] = useState<File | null>(null);
@@ -670,7 +670,7 @@ export default function VaultPage() {
         "response" in error &&
         typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
           ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
-          : "Import failed. Try a text-based file and keep the word limit between 5 and 40.";
+          : "Import failed because the server connection dropped. Try a smaller text-based PDF, DOCX, TXT, MD, CSV, or JSON file; scanned image PDFs are not supported yet.";
       toast.error(detail);
     },
   });
@@ -863,12 +863,6 @@ export default function VaultPage() {
     event.target.value = "";
     if (!file) return;
 
-    const parsedLimit = Number(wordLimit);
-    if (!Number.isFinite(parsedLimit) || parsedLimit < 5 || parsedLimit > 40) {
-      toast.error("Set a word limit between 5 and 40.");
-      return;
-    }
-
     const sourcePreview = await getLocalSourcePreview(file).catch(() => []);
     setLastImportFile(file);
     setClarificationAnswers({});
@@ -880,7 +874,7 @@ export default function VaultPage() {
       sourcePreview,
     });
 
-    importMutation.mutate({ file, limit: parsedLimit });
+    importMutation.mutate({ file, limit: DEFAULT_IMPORT_WORD_LIMIT });
   };
 
   const handleClarificationAnswerChange = (key: string, value: string) => {
@@ -893,12 +887,6 @@ export default function VaultPage() {
   const handleReanalyze = () => {
     if (!lastImportFile) {
       toast.error("Upload the original file again before reanalysis.");
-      return;
-    }
-
-    const parsedLimit = Number(wordLimit);
-    if (!Number.isFinite(parsedLimit) || parsedLimit < 5 || parsedLimit > 40) {
-      toast.error("Set a word limit between 5 and 40.");
       return;
     }
 
@@ -918,7 +906,7 @@ export default function VaultPage() {
 
     importMutation.mutate({
       file: lastImportFile,
-      limit: parsedLimit,
+      limit: DEFAULT_IMPORT_WORD_LIMIT,
       answers,
       previousImportIds: allImportResult?.imported_achievements.map((achievement) => achievement.id) ?? [],
     });
@@ -927,12 +915,6 @@ export default function VaultPage() {
   const handleBuildFromVault = () => {
     if (achievements.length === 0) {
       toast.error("Add at least one achievement before building a shortlist.");
-      return;
-    }
-
-    const parsedLimit = Number(wordLimit);
-    if (!Number.isFinite(parsedLimit) || parsedLimit < 5 || parsedLimit > 40) {
-      toast.error("Set a word limit between 5 and 40.");
       return;
     }
 
@@ -953,7 +935,7 @@ export default function VaultPage() {
         .slice(0, 6),
     });
 
-    shortlistMutation.mutate(parsedLimit);
+    shortlistMutation.mutate(DEFAULT_IMPORT_WORD_LIMIT);
   };
 
   useEffect(() => {
@@ -1042,8 +1024,6 @@ export default function VaultPage() {
         <TabsContent value="all">
           <AllAchievementsPanel
             result={allImportResult}
-            wordLimit={wordLimit}
-            onWordLimitChange={setWordLimit}
             onUploadClick={handleImportClick}
             onBuildFromVault={handleBuildFromVault}
             onReanalyze={handleReanalyze}

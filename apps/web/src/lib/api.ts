@@ -134,7 +134,7 @@ export const universitiesApi = {
     preferences: Record<string, unknown>;
     save_preferences?: boolean;
   }) => api.post("/api/universities/recommendations/common-app", data),
-  advisorPlan: (data: { university_name: string; intended_major?: string }) =>
+  advisorPlan: (data: { university_name: string; intended_major: string }) =>
     api.post("/api/universities/advisor/plan", data),
 };
 

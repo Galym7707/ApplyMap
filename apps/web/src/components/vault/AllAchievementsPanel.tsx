@@ -566,8 +566,6 @@ function SelectionColumn({
 
 export function AllAchievementsPanel({
   result,
-  wordLimit,
-  onWordLimitChange,
   onUploadClick,
   onBuildFromVault,
   onReanalyze,
@@ -583,8 +581,6 @@ export function AllAchievementsPanel({
   honorCount,
 }: {
   result: AchievementImportResult | null;
-  wordLimit: string;
-  onWordLimitChange: (value: string) => void;
   onUploadClick: () => void;
   onBuildFromVault: () => void;
   onReanalyze: () => void;
@@ -649,18 +645,9 @@ export function AllAchievementsPanel({
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
-              <Label htmlFor="vault-word-limit">Target word limit</Label>
-              <Input
-                id="vault-word-limit"
-                type="number"
-                min={5}
-                max={40}
-                value={wordLimit}
-                onChange={(event) => onWordLimitChange(event.target.value)}
-                className="mt-2"
-              />
-              <p className="mt-2 text-xs text-slate-500">
-                Backup cap only. Common App character limits are enforced separately.
+              <h3 className="text-sm font-semibold text-slate-900">Build Common App output</h3>
+              <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                The app enforces Common App character limits directly: 50, 100, and 150 characters for activities, and 100 characters for honors.
               </p>
               <Button
                 className="mt-4 w-full gap-2 bg-navy-950 text-white hover:bg-navy-900"

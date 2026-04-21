@@ -918,12 +918,23 @@ async def import_all_achievements(
         except (json.JSONDecodeError, ValueError) as exc:
             raise HTTPException(status_code=400, detail="Invalid previous import ids JSON.") from exc
 
-    parsed = parse_achievement_import(
-        raw_text,
-        current_user,
-        word_limit,
-        parsed_clarification_answers,
-    )
+    try:
+        parsed = parse_achievement_import(
+            raw_text,
+            current_user,
+            word_limit,
+            parsed_clarification_answers,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Import failed while analyzing the file. Try a smaller text-based PDF, DOCX, TXT, MD, CSV, "
+                "or JSON file; scanned image PDFs are not supported yet."
+            ),
+        ) from exc
 
     if parsed_previous_ids:
         db.query(Achievement).filter(

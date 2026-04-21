@@ -146,8 +146,7 @@ def university_advisor_plan(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    profile = current_user.profile
-    intended_major = payload.intended_major or (profile.intended_major if profile else None)
+    intended_major = payload.intended_major.strip()
     search_warning = None
     try:
         search_results = search_university_sources(payload.university_name, intended_major)
