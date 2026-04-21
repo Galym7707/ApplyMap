@@ -15,6 +15,7 @@ from ..schemas.achievement import (
     EvidenceFileOut,
     AchievementImportOut,
     AchievementShortlistRequest,
+    AchievementBulkDeleteRequest,
 )
 from ..models.achievement import Achievement, AchievementEvidenceFile, AchievementType
 from ..routes.auth import get_current_user
@@ -663,6 +664,30 @@ def create_achievement(
     return {
         "data": AchievementOut.model_validate(achievement).model_dump(),
         "message": "Achievement created",
+    }
+
+
+@router.post("/bulk-delete", response_model=dict)
+def bulk_delete_achievements(
+    payload: AchievementBulkDeleteRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not payload.ids:
+        return {"data": {"deleted_count": 0}, "message": "No achievements selected"}
+
+    deleted_count = (
+        db.query(Achievement)
+        .filter(
+            Achievement.user_id == current_user.id,
+            Achievement.id.in_(payload.ids),
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {
+        "data": {"deleted_count": deleted_count},
+        "message": "Achievements deleted",
     }
 
 

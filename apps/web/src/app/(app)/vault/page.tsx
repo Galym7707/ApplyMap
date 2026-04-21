@@ -605,9 +605,8 @@ export default function VaultPage() {
   });
 
   const clearTypeMutation = useMutation({
-    mutationFn: async ({ ids }: { type: "activity" | "honor"; ids: string[] }) => {
-      await Promise.all(ids.map((id) => achievementsApi.delete(id)));
-    },
+    mutationFn: ({ ids }: { type: "activity" | "honor"; ids: string[] }) =>
+      achievementsApi.bulkDelete(ids),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["achievements"] });
       clearImportAnalysis();
