@@ -862,6 +862,10 @@ export default function VaultPage() {
     event.target.value = "";
     if (!file) return;
 
+    const previousImportIds =
+      allImportResult?.file_name && allImportResult.file_name !== "Current Vault"
+        ? allImportResult.imported_achievements.map((achievement) => achievement.id)
+        : [];
     const sourcePreview = await getLocalSourcePreview(file).catch(() => []);
     setLastImportFile(file);
     setClarificationAnswers({});
@@ -873,7 +877,11 @@ export default function VaultPage() {
       sourcePreview,
     });
 
-    importMutation.mutate({ file, limit: DEFAULT_IMPORT_WORD_LIMIT });
+    importMutation.mutate({
+      file,
+      limit: DEFAULT_IMPORT_WORD_LIMIT,
+      previousImportIds,
+    });
   };
 
   const handleClarificationAnswerChange = (key: string, value: string) => {
