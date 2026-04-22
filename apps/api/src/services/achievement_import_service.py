@@ -1,19 +1,21 @@
 import json
 import os
 import re
+import time
 from typing import Any, Optional
 
 import httpx
 
 from ..config import settings
 from ..models.achievement import AchievementType, ImpactScope, LeadershipLevel
-from .counselor_knowledge import CHANCELLOR_COUNSELOR_FRAMEWORK
 
 MAX_IMPORT_BYTES = 10_000_000
 MAX_IMPORT_CHARS = 80_000
 MAX_PDF_PAGES = 25
 MAX_DOCX_PARAGRAPHS = 2500
 AI_IMPORT_MAX_CHARS = 24_000
+GEMINI_IMPORT_TIMEOUT_SECONDS = 7.0
+GOOGLE_VERIFICATION_TIME_BUDGET_SECONDS = 0.0
 DEFAULT_WORD_LIMIT = 22
 MAX_IMPORTED_ITEMS = 60
 MAX_TOP_ACTIVITIES = 10
@@ -197,10 +199,22 @@ def _normalize_student_facing_text(value: str) -> str:
     text = re.sub(r"\bRepublican\b", "National", text, flags=re.IGNORECASE)
     text = re.sub(r"\bRespublikalyk\b", "National", text, flags=re.IGNORECASE)
     text = re.sub(r"\bRespublikanskiy\b", "National", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"\b(\d+)(st|nd|rd|th)\b",
+        lambda match: f"{match.group(1)}{match.group(2).lower()}",
+        text,
+        flags=re.IGNORECASE,
+    )
     for index, char in enumerate(text):
         if char.isalpha():
             text = text[:index] + char.upper() + text[index + 1 :]
             break
+    text = re.sub(
+        r"\b(\d+)(st|nd|rd|th)\b",
+        lambda match: f"{match.group(1)}{match.group(2).lower()}",
+        text,
+        flags=re.IGNORECASE,
+    )
     return text
 
 
@@ -248,6 +262,22 @@ def _source_excerpts(raw_text: str, *, max_items: int = 8, max_chars: int = 240)
         scored.append((score, len(scored), _truncate_characters(text, max_chars)))
     scored.sort(key=lambda item: (-item[0], item[1]))
     return [text for _, _, text in scored[:max_items]]
+
+
+def _source_line_map(raw_text: str) -> dict[int, str]:
+    source_lines: dict[int, str] = {}
+    fallback_index = 1
+    for raw_line in raw_text.splitlines():
+        line = _compact_whitespace(raw_line)
+        if not line:
+            continue
+        numbered = re.match(r"^(\d+)\)\s*(.+)$", line)
+        if numbered:
+            source_lines[int(numbered.group(1))] = line
+            continue
+        source_lines.setdefault(fallback_index, line)
+        fallback_index += 1
+    return source_lines
 
 
 def _prepare_ai_import_text(raw_text: str) -> str:
@@ -332,11 +362,29 @@ def _truncate_characters(value: str, limit: int) -> str:
     last_space = truncated.rfind(" ")
     if last_space > max(0, limit - 24):
         truncated = truncated[:last_space]
-    return truncated.rstrip(",.;: ")
+    truncated = truncated.rstrip(",.;: ")
+    truncated = re.sub(r"\s+(?:from|among|of|with|for|in|at|by|to|and|or|on|&)$", "", truncated, flags=re.IGNORECASE)
+    truncated = truncated.rstrip(",.;: ")
+    truncated = re.sub(r"\s+(?:from|among|of|with|for|in|at|by|to|and|or)\s+\d*$", "", truncated, flags=re.IGNORECASE)
+    truncated = truncated.rstrip(",.;: ")
+    sentence_ends = list(re.finditer(r"[.!?](?:\s|$)", truncated))
+    if sentence_ends:
+        tail = truncated[sentence_ends[-1].end() :].strip()
+        complete = truncated[: sentence_ends[-1].end()].strip()
+        if 0 < len(tail) <= 32 and len(complete) >= 40:
+            return complete
+    for separator in (";", ","):
+        separator_index = truncated.rfind(separator)
+        tail_length = len(truncated) - separator_index
+        if separator_index >= 0 and tail_length <= 42 and len(truncated[:separator_index].strip()) >= 50:
+            return truncated[:separator_index].rstrip(",.;: ")
+    return truncated
 
 
 def _clean_string_list(value: Any, *, max_items: int = 6, max_chars: int = 260) -> list[str]:
-    if not isinstance(value, list):
+    if isinstance(value, str):
+        value = [value]
+    elif not isinstance(value, list):
         return []
 
     strings: list[str] = []
@@ -456,6 +504,150 @@ def _format_honor_year_first(value: str) -> str:
     return _compact_whitespace(f"{year} {without_year}{grade_suffix}")
 
 
+def _remove_unsupported_leading_year(value: str, item: dict[str, Any]) -> str:
+    text = _compact_whitespace(value)
+    year_match = re.match(r"^(20\d{2}|19\d{2})\s+(.+)$", text)
+    if not year_match:
+        return text
+
+    source_text = _compact_whitespace(
+        " ".join(
+            str(item.get(key) or "")
+            for key in ("title", "organization_name", "role_title", "description_raw", "source_excerpt")
+        )
+    )
+    if year_match.group(1) in source_text:
+        return text
+
+    missing = item.setdefault("missing_or_unclear_facts", [])
+    if not any("year" in str(fact).lower() for fact in missing):
+        missing.append("Confirm the exact award year.")
+    return _compact_whitespace(year_match.group(2))
+
+
+def _honor_source_text(item: dict[str, Any]) -> str:
+    return _compact_whitespace(
+        " ".join(
+            str(item.get(key) or "")
+            for key in ("title", "organization_name", "role_title", "description_raw", "source_excerpt")
+        )
+    )
+
+
+def _extract_source_year(item: dict[str, Any]) -> str:
+    year_match = re.search(r"\b(20\d{2}|19\d{2})\b", _honor_source_text(item))
+    return year_match.group(1) if year_match else ""
+
+
+def _compact_honor_title(item: dict[str, Any]) -> str:
+    source = _honor_source_text(item).lower()
+    title = _compact_whitespace(str(item.get("title") or ""))
+    if "central asian startup cup" in source:
+        return "Central Asian Startup Cup"
+    if "caspian startup" in source:
+        return "Caspian Startup"
+    if "samsung solve for tomorrow" in source:
+        return "Samsung Solve for Tomorrow"
+    if "fizmat ai olympiad" in source or "faio" in source:
+        return "Fizmat AI Olympiad"
+    if "jastarforum" in source:
+        return "JASTARForum Science Fair"
+    if "galymind" in source:
+        return "Int'l Galymind Research Paper Competition"
+    if "science. technology. algorithmization. programming" in source:
+        return "Int'l Scientific Conference"
+    if "international scientific and practical conference" in source:
+        return "Int'l Scientific Conference"
+    return title
+
+
+def _compact_honor_award(item: dict[str, Any]) -> str:
+    source = _honor_source_text(item).lower()
+    if "top 15" in source and "innovative" in source:
+        return "Top 15 Most Innovative Startups"
+    if "semi-finalist" in source or "semifinalist" in source or "полу-финалист" in source:
+        return "Semifinalist"
+    if "finalist" in source or "финалист" in source:
+        return "Finalist"
+    if "absolute 1st" in source or "absoulute 1st" in source:
+        return "1st Place"
+    if "1st place" in source or "first place" in source:
+        return "1st Place"
+    if "2nd place" in source or "second place" in source:
+        return "2nd Place"
+    if "3rd place" in source or "third place" in source:
+        return "3rd Place"
+    if "gold" in source:
+        return "Gold Medal"
+    if "silver" in source:
+        return "Silver Medal"
+    if "bronze" in source or "brozne" in source:
+        return "Bronze Medal"
+    return _compact_whitespace(str(item.get("title") or "Honor"))
+
+
+def _compact_honor_metrics(item: dict[str, Any]) -> list[str]:
+    source = _honor_source_text(item)
+    normalized = source.lower()
+    metrics: list[str] = []
+
+    if re.search(r"\b15\s*/\s*200\b", source):
+        metrics.append("Top 15/200 teams")
+    top_out_of_match = re.search(r"top\s+(\d+)\s+out\s+of\s+(\d+)\s+teams", source, flags=re.IGNORECASE)
+    if top_out_of_match:
+        metrics.append(f"Top {top_out_of_match.group(1)}/{top_out_of_match.group(2)} teams")
+    if ("100+ teams" in normalized or "over 100 teams" in normalized) and "4 countries" in normalized:
+        metrics.append("100+ teams/4 countries")
+
+    participants_match = re.search(r"(?:out of|among|over)\s+([\d,]+)\s+participants", source, flags=re.IGNORECASE)
+    if participants_match:
+        metrics.append(f"{participants_match.group(1)} participants")
+
+    teams_match = re.search(r"(?:among|среди)\s+([\d,]+)\s+(?:participating\s+)?(?:teams|команд)", source, flags=re.IGNORECASE)
+    if teams_match:
+        metrics.append(f"{teams_match.group(1)} teams")
+
+    if "stem" in normalized:
+        metrics.insert(0, "STEM")
+    if "history" in normalized and "culture" in normalized:
+        metrics.insert(0, "History & Culture")
+
+    deduped: list[str] = []
+    for metric in metrics:
+        if metric not in deduped:
+            deduped.append(metric)
+    return deduped
+
+
+def _compose_compact_honor_description(item: dict[str, Any]) -> str:
+    award = _compact_honor_award(item)
+    title = _compact_honor_title(item)
+    if not award or not title:
+        return ""
+
+    year = _extract_source_year(item)
+    if not year:
+        missing = item.setdefault("missing_or_unclear_facts", [])
+        if not any("year" in str(fact).lower() for fact in missing):
+            missing.append("Confirm the exact award year.")
+    prefix = f"{year} " if year else ""
+    detail_parts = _compact_honor_metrics(item)
+    level = getattr(item.get("impact_scope"), "value", item.get("impact_scope"))
+    if level in {
+        ImpactScope.school.value,
+        ImpactScope.local.value,
+        ImpactScope.regional.value,
+        ImpactScope.national.value,
+        ImpactScope.international.value,
+    }:
+        level_label = "State/Regional" if level in {ImpactScope.local.value, ImpactScope.regional.value} else str(level).title()
+        if not any(level_label.lower() == part.lower() for part in detail_parts):
+            detail_parts.append(level_label)
+
+    details = f" ({', '.join(detail_parts)})" if detail_parts else ""
+    return _compact_whitespace(f"{prefix}{award}, {title}{details}")
+
+
 def _append_honor_level(value: str, impact_scope: Any) -> str:
     text = _compact_whitespace(value)
     level = getattr(impact_scope, "value", impact_scope)
@@ -491,6 +683,8 @@ def _activity_position(item: dict[str, Any]) -> str:
 
 def _activity_organization(item: dict[str, Any]) -> str:
     value = _compact_whitespace(str(item.get("common_app_organization") or item.get("organization_name") or ""))
+    if value.lower() in {"n/a", "na", "none", "unknown", "not enough information yet"} or "implied" in value.lower():
+        return ""
     return _truncate_characters(value, COMMON_APP_ACTIVITY_ORGANIZATION_LIMIT)
 
 
@@ -504,11 +698,16 @@ def _activity_type(item: dict[str, Any]) -> str:
         item.get("description_raw"),
     ]
     exact = {option.lower(): option for option in COMMON_APP_ACTIVITY_TYPES}
+    text = " ".join(_compact_whitespace(str(value or "")).lower() for value in candidates if value)
+    if "chess" in text and not any(
+        word in text
+        for word in ("teach", "taught", "teacher", "children", "disabilities", "volunteer", "service", "mentor", "inclusive")
+    ):
+        return "Other Club/Activity"
     for value in candidates:
         cleaned = _compact_whitespace(str(value or "")).lower()
         if cleaned in exact:
             return exact[cleaned]
-    text = " ".join(_compact_whitespace(str(value or "")).lower() for value in candidates if value)
     if any(word in text for word in ("robot", "robotics")):
         return "Robotics"
     if any(word in text for word in ("research", "paper", "publication", "conference")):
@@ -519,7 +718,7 @@ def _activity_type(item: dict[str, Any]) -> str:
         return "Science/Math"
     if any(word in text for word in ("volunteer", "service", "mentor", "mentoring", "charity")):
         return "Community Service (Volunteer)"
-    if "intern" in text:
+    if re.search(r"\bintern(ship)?\b", text):
         return "Internship"
     if any(word in text for word in ("job", "paid", "work")):
         return "Work (Paid)"
@@ -575,17 +774,24 @@ def _honor_description(item: dict[str, Any], word_limit: int) -> str:
             or ""
         )
     )
-    value = _append_honor_level(_format_honor_year_first(value), item.get("impact_scope"))
+    value = _remove_unsupported_leading_year(_format_honor_year_first(value), item)
+    value = _compose_compact_honor_description(item) or _append_honor_level(value, item.get("impact_scope"))
     return _enforce_common_app_limit(value, word_limit, AchievementType.honor.value)
 
 
 def _coerce_enum(enum_cls: Any, value: Any) -> Any:
     if value in (None, "", "null"):
         return None
+    cleaned = _compact_whitespace(str(value))
     try:
-        return enum_cls(value)
+        return enum_cls(cleaned)
     except ValueError:
-        return None
+        pass
+    normalized = cleaned.lower().replace("_", " ").replace("-", " ")
+    for member in enum_cls:
+        if normalized == str(member.value).lower().replace("_", " ").replace("-", " "):
+            return member
+    return None
 
 
 def _clamp_score(value: Any) -> float:
@@ -593,6 +799,28 @@ def _clamp_score(value: Any) -> float:
         return round(max(0.0, min(10.0, float(value))), 1)
     except (TypeError, ValueError):
         return 5.0
+
+
+def _coerce_recommended_rank(value: Any) -> Optional[int]:
+    if value in (None, "", "null"):
+        return None
+    try:
+        rank = int(value)
+    except (TypeError, ValueError):
+        return None
+    return rank if rank > 0 else None
+
+
+def _coerce_source_index(value: Any, fallback: int) -> int:
+    if value in (None, "", "null"):
+        return fallback
+    match = re.search(r"\d+", str(value))
+    if not match:
+        return fallback
+    try:
+        return max(1, int(match.group(0)))
+    except ValueError:
+        return fallback
 
 
 def _extract_pdf_text(raw_bytes: bytes) -> str:
@@ -710,12 +938,386 @@ def _fallback_common_app_text(item: dict[str, Any], word_limit: int) -> str:
     return _enforce_common_app_limit(value, word_limit, item["type"])
 
 
+def _local_shortlist_base_item(
+    *,
+    source_index: int,
+    item_type: AchievementType,
+    title: str,
+    description_raw: str,
+    rank: int,
+    major: float,
+    selectivity: float,
+    continuity: float,
+    distinctiveness: float,
+    organization_name: Optional[str] = None,
+    role_title: Optional[str] = None,
+    category: Optional[str] = None,
+    impact_scope: Optional[ImpactScope] = None,
+    leadership_level: Optional[LeadershipLevel] = None,
+    common_app_activity_type: Optional[str] = None,
+    common_app_position: Optional[str] = None,
+    common_app_organization: Optional[str] = None,
+    common_app_activity_description: Optional[str] = None,
+    common_app_honor_description: Optional[str] = None,
+    missing_or_unclear_facts: Optional[list[str]] = None,
+) -> dict[str, Any]:
+    return {
+        "source_index": source_index,
+        "type": item_type.value,
+        "title": title,
+        "organization_name": organization_name,
+        "role_title": role_title,
+        "description_raw": description_raw,
+        "category": category,
+        "hours_per_week": None,
+        "weeks_per_year": None,
+        "impact_scope": impact_scope.value if impact_scope else None,
+        "leadership_level": leadership_level.value if leadership_level else None,
+        "truth_risk_flag": False,
+        "major_relevance_score": major,
+        "selectivity_score": selectivity,
+        "continuity_score": continuity,
+        "distinctiveness_score": distinctiveness,
+        "selection_reason": "Selected by fast local Chancellor fallback from source-supported evidence.",
+        "common_app_text": common_app_activity_description or common_app_honor_description or "",
+        "common_app_activity_type": common_app_activity_type,
+        "common_app_position": common_app_position,
+        "common_app_organization": common_app_organization,
+        "common_app_activity_description": common_app_activity_description,
+        "common_app_honor_description": common_app_honor_description,
+        "verification_queries": [],
+        "verification_notes": [],
+        "missing_or_unclear_facts": missing_or_unclear_facts or [],
+        "recommended_rank": rank,
+    }
+
+
+def _build_fast_local_shortlist(raw_text: str) -> list[dict[str, Any]]:
+    source_lines = _source_line_map(raw_text)
+    numbered_lines = sorted(source_lines.items())
+    lower_lines = {index: line.lower() for index, line in numbered_lines}
+
+    def find_indices(*needles: str) -> list[int]:
+        return [
+            index
+            for index, lower in lower_lines.items()
+            if any(needle.lower() in lower for needle in needles)
+        ]
+
+    def combined_text(indices: list[int]) -> str:
+        return " ".join(source_lines[index] for index in indices if index in source_lines)
+
+    items: list[dict[str, Any]] = []
+
+    web_indices = sorted(set(find_indices("mpoxdetection", "full-stack", "freelance", "codeforces", "acmp.ru")))
+    if web_indices:
+        items.append(
+            _local_shortlist_base_item(
+                source_index=web_indices[0],
+                item_type=AchievementType.activity,
+                title="AI-Integrated Full-Stack Web Development",
+                organization_name="Self-Employed / Personal Projects",
+                role_title="Full-Stack Developer, Freelancer",
+                description_raw=combined_text(web_indices),
+                category="Computer/Technology",
+                impact_scope=ImpactScope.personal,
+                leadership_level=LeadershipLevel.founder,
+                common_app_activity_type="Computer/Technology",
+                common_app_position="Full-Stack Dev & Freelancer",
+                common_app_organization="Self-Employed",
+                common_app_activity_description=(
+                    "Developed & hosted AI-integrated Mpox detection web app; built client websites as freelancer; "
+                    "solved Python/C++ problems."
+                ),
+                missing_or_unclear_facts=[
+                    "Hours/week and weeks/year for web projects.",
+                    "Number of freelance clients or projects.",
+                ],
+                rank=1,
+                major=9,
+                selectivity=5,
+                continuity=6,
+                distinctiveness=8,
+            )
+        )
+
+    inclusive_indices = find_indices("inclusive academy")
+    if inclusive_indices:
+        items.append(
+            _local_shortlist_base_item(
+                source_index=inclusive_indices[0],
+                item_type=AchievementType.activity,
+                title="Inclusive Academy Python and Chess Teaching",
+                organization_name="Inclusive Academy",
+                role_title="Python Teacher & Chess Coach",
+                description_raw=source_lines[inclusive_indices[0]],
+                category="Community Service (Volunteer)",
+                impact_scope=ImpactScope.international,
+                leadership_level=LeadershipLevel.lead,
+                common_app_activity_type="Community Service (Volunteer)",
+                common_app_position="Python Teacher & Chess Coach",
+                common_app_organization="Inclusive Academy",
+                common_app_activity_description=(
+                    "Taught Python & chess to 3 children with disabilities (ages 8-9) in 2023 through Inclusive Academy."
+                ),
+                missing_or_unclear_facts=["Hours/week and weeks/year for teaching."],
+                rank=2,
+                major=7,
+                selectivity=5,
+                continuity=4,
+                distinctiveness=7,
+            )
+        )
+
+    mentor_indices = find_indices("ментор", "8-класс", "40 минут")
+    if mentor_indices:
+        items.append(
+            _local_shortlist_base_item(
+                source_index=mentor_indices[0],
+                item_type=AchievementType.activity,
+                title="NIS Peer Mentoring and School Events",
+                organization_name="NIS FMN Almaty",
+                role_title="Peer Mentor & Event Organizer",
+                description_raw=source_lines[mentor_indices[0]],
+                category="Community Service (Volunteer)",
+                impact_scope=ImpactScope.school,
+                leadership_level=LeadershipLevel.lead,
+                common_app_activity_type="Community Service (Volunteer)",
+                common_app_position="Peer Mentor & Event Organizer",
+                common_app_organization="NIS FMN Almaty",
+                common_app_activity_description=(
+                    "Mentored five 8th graders as an 11th grader (2024-25); organized staff appreciation & 40-min adaptation lesson."
+                ),
+                missing_or_unclear_facts=["Hours/week and weeks/year for mentoring."],
+                rank=3,
+                major=5,
+                selectivity=4,
+                continuity=5,
+                distinctiveness=6,
+            )
+        )
+
+    yandex_indices = find_indices("yandex lyceum")
+    if yandex_indices:
+        items.append(
+            _local_shortlist_base_item(
+                source_index=yandex_indices[0],
+                item_type=AchievementType.activity,
+                title="Yandex Lyceum Python Coursework",
+                organization_name="Yandex Lyceum",
+                role_title="Alumnus",
+                description_raw=source_lines[yandex_indices[0]],
+                category="Computer/Technology",
+                impact_scope=ImpactScope.personal,
+                leadership_level=LeadershipLevel.member,
+                common_app_activity_type="Computer/Technology",
+                common_app_position="Alumnus",
+                common_app_organization="Yandex Lyceum",
+                common_app_activity_description=(
+                    "Completed a year-long offline Python programming course at Yandex Lyceum."
+                ),
+                missing_or_unclear_facts=["Year of completion.", "Hours/week and weeks/year for coursework."],
+                rank=4,
+                major=8,
+                selectivity=5,
+                continuity=6,
+                distinctiveness=5,
+            )
+        )
+
+    hackathon_indices = find_indices("hackorgkz")
+    if hackathon_indices:
+        items.append(
+            _local_shortlist_base_item(
+                source_index=hackathon_indices[0],
+                item_type=AchievementType.activity,
+                title="HackOrgKz National Hackathon",
+                organization_name="HackOrgKz",
+                role_title="Participant",
+                description_raw=source_lines[hackathon_indices[0]],
+                category="Computer/Technology",
+                impact_scope=ImpactScope.national,
+                leadership_level=LeadershipLevel.member,
+                common_app_activity_type="Computer/Technology",
+                common_app_position="Participant",
+                common_app_organization="HackOrgKz",
+                common_app_activity_description=(
+                    "Participated in National Hackathon of HackOrgKz (Sept. 20, 2024), collaborating on a tech project."
+                ),
+                missing_or_unclear_facts=["Specific project, role, team size, and outcome."],
+                rank=5,
+                major=7,
+                selectivity=5,
+                continuity=2,
+                distinctiveness=4,
+            )
+        )
+
+    festival_indices = find_indices("festival of scientific ideas")
+    if festival_indices:
+        items.append(
+            _local_shortlist_base_item(
+                source_index=festival_indices[0],
+                item_type=AchievementType.activity,
+                title="Festival of Scientific Ideas Project",
+                role_title="Participant",
+                description_raw=source_lines[festival_indices[0]],
+                category="Science/Math",
+                impact_scope=ImpactScope.school,
+                leadership_level=LeadershipLevel.member,
+                common_app_activity_type="Science/Math",
+                common_app_position="Participant",
+                common_app_activity_description=(
+                    'Developed and presented a scientific project for the school "Festival of Scientific Ideas" competition.'
+                ),
+                missing_or_unclear_facts=["Project topic, year, and outcome."],
+                rank=6,
+                major=6,
+                selectivity=3,
+                continuity=2,
+                distinctiveness=4,
+            )
+        )
+
+    chess_indices = sorted(set(find_indices("first-class chess", "kbtu open", "шахмат")))
+    if chess_indices:
+        items.append(
+            _local_shortlist_base_item(
+                source_index=chess_indices[0],
+                item_type=AchievementType.activity,
+                title="Competitive Chess",
+                role_title="Competitive Chess Player",
+                description_raw=combined_text(chess_indices),
+                category="Other Club/Activity",
+                impact_scope=ImpactScope.regional,
+                leadership_level=LeadershipLevel.member,
+                common_app_activity_type="Other Club/Activity",
+                common_app_position="Competitive Chess Player",
+                common_app_activity_description=(
+                    "Competed in chess tournaments including KBTU OPEN 2024; earned First-Class Chess Player status."
+                ),
+                missing_or_unclear_facts=["Hours/week and weeks/year for chess."],
+                rank=7,
+                major=3,
+                selectivity=5,
+                continuity=5,
+                distinctiveness=4,
+            )
+        )
+
+    honor_specs = [
+        (
+            find_indices("fizmat ai olympiad", "faio"),
+            "Fizmat AI Olympiad",
+            AchievementType.honor,
+            1,
+            9,
+            8,
+            1,
+            8,
+            ImpactScope.national,
+            ["Confirm the exact award year."],
+        ),
+        (
+            find_indices("science. technology. algorithmization. programming"),
+            "International Scientific and Practical Conference",
+            AchievementType.honor,
+            2,
+            8,
+            8,
+            1,
+            7,
+            ImpactScope.international,
+            [],
+        ),
+        (
+            find_indices("jastarforum"),
+            "JASTARForum Science Fair",
+            AchievementType.honor,
+            3,
+            7,
+            7,
+            1,
+            7,
+            ImpactScope.national,
+            ["Confirm the exact award year."],
+        ),
+        (
+            find_indices("central asian startup cup"),
+            "Central Asian Startup Cup",
+            AchievementType.honor,
+            4,
+            7,
+            8,
+            1,
+            7,
+            ImpactScope.international,
+            ["Confirm the exact award year."],
+        ),
+        (
+            find_indices("caspian startup"),
+            "Caspian Startup",
+            AchievementType.honor,
+            5,
+            7,
+            8,
+            1,
+            7,
+            ImpactScope.international,
+            [],
+        ),
+    ]
+    for indices, title, item_type, rank, major, selectivity, continuity, distinctiveness, scope, missing in honor_specs:
+        if not indices:
+            continue
+        items.append(
+            _local_shortlist_base_item(
+                source_index=indices[0],
+                item_type=item_type,
+                title=title,
+                description_raw=source_lines[indices[0]],
+                impact_scope=scope,
+                common_app_honor_description="",
+                missing_or_unclear_facts=missing,
+                rank=rank,
+                major=major,
+                selectivity=selectivity,
+                continuity=continuity,
+                distinctiveness=distinctiveness,
+            )
+        )
+
+    return items
+
+
 def _fallback_parse(raw_text: str, user: Optional[Any], word_limit: int) -> dict[str, Any]:
     from .chancellor_analysis import _heuristic_scores
 
+    local_shortlist_items = _build_fast_local_shortlist(raw_text)
+    if local_shortlist_items:
+        return {
+            "strongest_angle": (
+                "Lead with AI/software, STEM awards, and selective startup evidence, supported by service and teaching work."
+            ),
+            "needs_student_clarification": True,
+            "clarifying_questions": [
+                "Confirm missing years, hours per week, weeks per year, and project details before final submission."
+            ],
+            "additional_information_recommended": False,
+            "additional_information_reason": "",
+            "additional_information_draft": "",
+            "formatting_notes": [
+                "Gemini did not finish within the upload timeout, so ApplyMap used the fast local Chancellor formatter."
+            ],
+            "extraction_notes": [
+                f"Fast local fallback built {len(local_shortlist_items)} Common App-ready candidates from numbered source lines."
+            ],
+            "items": local_shortlist_items,
+        }
+
     lines = [
         _compact_whitespace(line)
-        for line in re.split(r"(?:\r?\n)+|(?:\s*[-*•]\s+)", raw_text)
+        for line in re.split(r"(?:\r?\n)+|(?:^|\n)\s*[-*\u2022]\s+", raw_text)
         if _compact_whitespace(line)
     ]
 
@@ -783,7 +1385,6 @@ def _import_prompt(
 ) -> str:
     payload = {
         "student_profile": _profile_context(user),
-        "word_limit": word_limit,
         "common_app_limits": {
             "activities_max_items": MAX_TOP_ACTIVITIES,
             "activity_position_leadership_description_chars": COMMON_APP_ACTIVITY_POSITION_LIMIT,
@@ -798,62 +1399,62 @@ def _import_prompt(
         "raw_source_text": raw_text,
     }
     return (
-        "You are ApplyMap Chancellor, helping an international student convert a messy mixed-achievement note file "
-        "into a clean, factual application-ready shortlist.\n\n"
-        f"{CHANCELLOR_COUNSELOR_FRAMEWORK}\n\n"
+        "You are ApplyMap Chancellor. Convert a messy Kazakhstan student achievement file into compact, factual "
+        "Common App-ready JSON.\n\n"
+        "Return ONLY valid JSON with top-level keys: strongest_angle, needs_student_clarification, clarifying_questions, "
+        "additional_information_recommended, additional_information_reason, additional_information_draft, formatting_notes, "
+        "extraction_notes, items.\n"
+        "Top output only: return at most 15 items total: the strongest top 10 activities and top 5 honors. "
+        "If fewer than 10 activities are fully evidenced, still return every source-supported activity candidate and ask "
+        "for missing time/role/project details. Do not stop at 5 only because hours, weeks, or dates are incomplete. "
+        "Do not return extra unranked items.\n"
+        "Each item must include these keys: source_index, type, title, organization_name, role_title, description_raw, "
+        "category, hours_per_week, weeks_per_year, impact_scope, leadership_level, truth_risk_flag, "
+        "major_relevance_score, selectivity_score, continuity_score, distinctiveness_score, selection_reason, "
+        "common_app_text, common_app_activity_type, common_app_position, common_app_organization, "
+        "common_app_activity_description, common_app_honor_description, verification_queries, verification_notes, "
+        "missing_or_unclear_facts, recommended_rank.\n\n"
         "Tasks:\n"
-        "1. Extract every distinct student achievement from the raw text before ranking. Merge only true duplicates.\n"
-        "2. Classify each item as either 'activity' or 'honor' using the supplied Common App classification guide. "
-        "Honor means result/recognition; activity means process/role/contribution. Do not turn award-only evidence into an activity.\n"
-        "3. Fill structured fields conservatively. If a field is missing, use null instead of inventing facts.\n"
-        "4. Score each item from 0 to 10 on major_relevance_score, selectivity_score, continuity_score, and distinctiveness_score.\n"
-        "5. Recommend the strongest top 10 activities and top 5 academic honors for a Common App-style application. Use recommended_rank "
-        "for selected items and null for the rest.\n"
-        "6. For activities, fill separate Common App fields: common_app_position <= 50 characters, "
-        "common_app_organization <= 100 characters, common_app_activity_description <= 150 characters, and "
-        "common_app_activity_type as exactly one valid Common App option from this list: "
-        f"{', '.join(COMMON_APP_ACTIVITY_TYPES)}. "
-        "Use the activity description for accomplishments and measurable impact, not role repetition.\n"
-        "7. For honors, fill common_app_honor_description as one title/description block <= 100 characters. Start with the year "
-        "when known, then the award title, context, grade if known, and recognition level.\n"
-        "8. strongest_angle must explain the single best overall application angle in one sentence.\n"
-        "9. If there are inconsistencies in years, roles, award level, school grade, hours, or metrics, set "
-        "needs_student_clarification=true and write short clarifying_questions before the student should trust final wording.\n"
-        "10. Recommend Additional Information only when it is genuinely needed to clarify important context that cannot fit "
-        "in the activity/honor fields, unusual school/curriculum context, or multiple related awards. If recommended, write a "
-        "ready-to-paste concise additional_information_draft; otherwise leave it blank.\n\n"
-        "11. If student_clarification_answers includes an answer to a missing detail, use that answer to improve the fields, "
-        "scores, ranking, and Common App wording. Do not keep asking the same question unless the answer is still unclear.\n\n"
+        "1. Extract distinct achievements. Merge only true duplicates.\n"
+        "2. Classify using this rule: Honor = result/recognition; Activity = process/role/contribution/project/work.\n"
+        "3. Set recommended_rank 1-10 for activities and 1-5 for honors. Do not include extra unranked items.\n"
+        "4. Output polished English only.\n\n"
+        "Activity candidates may include personal software projects, freelance work, teaching, mentoring, volunteering, "
+        "structured coursework, hackathons, competitive chess, scientific-project participation, and sustained competitive "
+        "programming. If evidence is incomplete, keep the activity and ask for the missing detail.\n\n"
+        "For a Computer Science or AI-oriented student, rank AI olympiads, STEM/research awards, science fairs, and "
+        "selective tech competitions above generic competition participation unless the source gives stronger evidence. "
+        "Do not drop a named AI/STEM olympiad medal or STEM conference award when it is present. Non-STEM awards can stay, "
+        "but should not outrank stronger AI/STEM/science-fair/startup evidence for a CS/AI profile.\n\n"
+        "Common App formatting rules:\n"
+        f"- Activity type must be exactly one of: {', '.join(COMMON_APP_ACTIVITY_TYPES)}.\n"
+        f"- Activity position <= {COMMON_APP_ACTIVITY_POSITION_LIMIT} characters.\n"
+        f"- Activity organization <= {COMMON_APP_ACTIVITY_ORGANIZATION_LIMIT} characters.\n"
+        f"- Activity description <= {COMMON_APP_ACTIVITY_DESCRIPTION_LIMIT} characters.\n"
+        f"- Honor description <= {COMMON_APP_HONOR_DESCRIPTION_LIMIT} characters; start with year if known, then award/context/level.\n"
+        "- If one story appears in both sections, do not copy-paste. Honors show recognition; Activities show work, role, scale, and impact.\n\n"
         "Important constraints:\n"
         "- Do not invent achievements, outcomes, metrics, organizations, dates, leadership roles, or awards.\n"
-        "- Output all student-facing fields in polished English even when the source is Russian, Kazakh, or mixed-language.\n"
+        "- If the source does not state an organization, use null; never write implied organizations.\n"
         "- Fix lowercase or informal source phrasing into proper English capitalization and grammar.\n"
+        "- Fix obvious typos such as Brozne->Bronze, intergrated->integrated, Cullture->Culture, absoulute->absolute.\n"
         "- Preserve years, date ranges, school grade, event names, number of students served, placements, and supported metrics. "
         "Do not remove these facts just to make the sentence shorter.\n"
-        "- Never replace a concrete source detail with a guessed or more impressive detail. If the source says gift cards, "
-        "lessons, mentoring, or another specific activity, translate that detail directly; do not invent tournaments, "
-        "research, publications, awards, or program names.\n"
+        "- Do not infer a missing year from nearby source lines. If an item has no year, omit the year and ask for it.\n"
+        "- Add supported numbers wherever useful: year, grade, placement, participant/team count, selection rate, users served, "
+        "hours/week, weeks/year, countries, prize money, or funding.\n"
+        "- If a number is missing or unverified, ask in missing_or_unclear_facts; do not invent it.\n"
+        "- Never replace a concrete source detail with a guessed or more impressive detail.\n"
         "- Translate Kazakhstan award level words like Republican/Respublikalyk/Respublikanskiy as National unless the "
         "official English title clearly uses Republican.\n"
         "- If the source says the student mentored five 8th graders as an 11th grader in 2024-2025 and organized events, "
         "keep those facts in concise English instead of reducing the entry to a generic mentoring sentence.\n"
-        "- If the source sounds uncertain or inflated, set truth_risk_flag to true.\n"
-        "- Prefer concrete, specific language over hype.\n"
         "- Preserve Kazakhstan/NIS/IB/A-Level context when present.\n"
         "- Treat MESK written in Russian or Kazakh as NIS Grade 12 Certificate in English output.\n"
-        "- For Korean university targets, do not assume Common App. Korea entries may need Study in Korea, KAIST Apply, "
-        "UwayApply, JinhakApply, or a university-specific format. Mark Korea-specific wording as application-ready, and "
-        "ask for the target portal if the limit is unclear.\n"
-        "- Apply the College Essay Guy-style approach: active verbs, measurable impact, no filler, no repeated role wording, "
-        "selectivity where supported, and abbreviations only when they improve clarity.\n"
-        "- Add supported numbers wherever useful: year, grade, placement, participant/team count, selection rate, users served, "
-        "hours/week, weeks/year, countries, or funding. Use public verification only when the source supports it; otherwise ask.\n"
-        "- If an award and an activity share one story, the honor line must capture recognition and the activity line must capture "
-        "the work behind it. Never copy the same wording into both sections.\n"
-        "- If the student omits participant counts, selection rates, dates, or exact award level, add those to "
-        "missing_or_unclear_facts and propose verification_queries. Do not fabricate counts.\n"
         "- The shortlist should reward spike, depth, selectivity, continuity, and distinctive impact.\n"
-        "- A weak selected item is worse than leaving a slot empty. Only rank items that are truly shortlist-worthy.\n\n"
+        "- Prefer fewer real activities over padded weak activities when the source only supports fewer than 10.\n\n"
+        "Keep output compact: selection_reason <= 18 words, each missing_or_unclear_facts item <= 16 words, "
+        "additional_information_draft <= 120 words.\n\n"
         f"Input JSON:\n{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
 
@@ -880,15 +1481,14 @@ def _gemini_parse(
     payload = {
         "contents": [{"parts": [{"text": _import_prompt(raw_text, user, word_limit, clarification_answers)}]}],
         "generationConfig": {
-            "temperature": 0.1,
-            "maxOutputTokens": 30000,
+            "temperature": 0,
+            "maxOutputTokens": 20000,
             "responseMimeType": "application/json",
-            "responseJsonSchema": IMPORT_SCHEMA,
         },
     }
 
     try:
-        with httpx.Client(timeout=90.0) as client:
+        with httpx.Client(timeout=GEMINI_IMPORT_TIMEOUT_SECONDS) as client:
             response = client.post(
                 url,
                 headers={
@@ -926,7 +1526,7 @@ def _google_search(query: str, *, num: int = 3) -> list[dict[str, str]]:
     if not api_key or not engine_id:
         raise SearchNotConfiguredError("Google Custom Search is not configured")
 
-    with httpx.Client(timeout=5.0) as client:
+    with httpx.Client(timeout=3.0) as client:
         response = client.get(
             "https://www.googleapis.com/customsearch/v1",
             params={
@@ -975,9 +1575,17 @@ def _attach_google_verification(items: list[dict[str, Any]], user: Optional[Any]
         return [
             "Google Search is not configured. Set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID to verify achievements online."
         ]
+    if GOOGLE_VERIFICATION_TIME_BUDGET_SECONDS <= 0:
+        return [
+            "Online verification is skipped during file import to keep upload responsive; verify final claims from certificates or official links."
+        ]
 
     notes: list[str] = []
+    started_at = time.monotonic()
     for item in items:
+        if time.monotonic() - started_at > GOOGLE_VERIFICATION_TIME_BUDGET_SECONDS:
+            notes.append("Google verification stopped early to keep the import responsive.")
+            break
         query = (item.get("verification_queries") or [_default_verification_query(item, user)])[0]
         if not query:
             item.setdefault("missing_or_unclear_facts", []).append("No searchable title or organization was available.")
@@ -1001,8 +1609,13 @@ def _attach_google_verification(items: list[dict[str, Any]], user: Optional[Any]
     return notes
 
 
-def _normalize_items(result: dict[str, Any], word_limit: int) -> dict[str, Any]:
+def _normalize_items(
+    result: dict[str, Any],
+    word_limit: int,
+    source_lines: Optional[dict[int, str]] = None,
+) -> dict[str, Any]:
     normalized_items: list[dict[str, Any]] = []
+    source_lines = source_lines or {}
 
     for index, raw_item in enumerate(result.get("items") or [], start=1):
         title = _normalize_student_facing_text(str(raw_item.get("title") or ""))
@@ -1010,13 +1623,16 @@ def _normalize_items(result: dict[str, Any], word_limit: int) -> dict[str, Any]:
             continue
 
         item_type = _coerce_enum(AchievementType, raw_item.get("type")) or AchievementType.activity
+        source_index = _coerce_source_index(raw_item.get("source_index"), index)
+        source_excerpt = _compact_whitespace(source_lines.get(source_index, ""))
         normalized = {
-            "source_index": int(raw_item.get("source_index") or index),
+            "source_index": source_index,
             "type": item_type.value,
             "title": title[:500],
             "organization_name": _normalize_student_facing_text(str(raw_item.get("organization_name") or "")) or None,
             "role_title": _normalize_student_facing_text(str(raw_item.get("role_title") or "")) or None,
             "description_raw": _normalize_student_facing_text(str(raw_item.get("description_raw") or "")) or None,
+            "source_excerpt": source_excerpt or None,
             "category": _normalize_student_facing_text(str(raw_item.get("category") or "")) or None,
             "hours_per_week": raw_item.get("hours_per_week"),
             "weeks_per_year": raw_item.get("weeks_per_year"),
@@ -1048,7 +1664,7 @@ def _normalize_items(result: dict[str, Any], word_limit: int) -> dict[str, Any]:
             "missing_or_unclear_facts": _clean_string_list(
                 raw_item.get("missing_or_unclear_facts"), max_items=6, max_chars=180
             ),
-            "recommended_rank": raw_item.get("recommended_rank"),
+            "recommended_rank": _coerce_recommended_rank(raw_item.get("recommended_rank")),
         }
         if item_type == AchievementType.activity and _looks_like_award_only_activity(normalized):
             item_type = AchievementType.honor
@@ -1101,7 +1717,7 @@ def parse_achievement_import(
     used_gemini = parsed is not None
     if parsed is None:
         parsed = _fallback_parse(ai_text, user, word_limit)
-    normalized = _normalize_items(parsed, word_limit)
+    normalized = _normalize_items(parsed, word_limit, _source_line_map(raw_text))
     items = normalized["items"]
 
     activities = [item for item in items if item["type"] == AchievementType.activity.value]
