@@ -1007,6 +1007,41 @@ def _build_fast_local_shortlist(raw_text: str) -> list[dict[str, Any]]:
     def combined_text(indices: list[int]) -> str:
         return " ".join(source_lines[index] for index in indices if index in source_lines)
 
+    def best_evidence_line(indices: list[int]) -> Optional[int]:
+        """Prefer the dedicated award line over a long activity line listing awards won."""
+        if not indices:
+            return None
+
+        def score(index: int) -> tuple[int, int, int]:
+            lower = lower_lines.get(index, "")
+            composite_penalty = 0
+            if "with which i won" in lower or "which i won" in lower:
+                composite_penalty += 3
+            if "mpoxdetection" in lower and any(
+                phrase in lower
+                for phrase in (
+                    "caspian startup",
+                    "central asian startup cup",
+                    "jastarforum",
+                    "science. technology. algorithmization. programming",
+                )
+            ):
+                composite_penalty += 2
+            if "," in lower and sum(
+                phrase in lower
+                for phrase in (
+                    "caspian startup",
+                    "central asian startup cup",
+                    "jastarforum",
+                    "science. technology. algorithmization. programming",
+                    "samsung solve for tomorrow",
+                )
+            ) >= 3:
+                composite_penalty += 2
+            return (composite_penalty, len(lower), index)
+
+        return min(indices, key=score)
+
     items: list[dict[str, Any]] = []
 
     web_indices = sorted(set(find_indices("mpoxdetection", "full-stack", "freelance", "codeforces", "acmp.ru")))
@@ -1268,14 +1303,15 @@ def _build_fast_local_shortlist(raw_text: str) -> list[dict[str, Any]]:
         ),
     ]
     for indices, title, item_type, rank, major, selectivity, continuity, distinctiveness, scope, missing in honor_specs:
-        if not indices:
+        source_index = best_evidence_line(indices)
+        if source_index is None:
             continue
         items.append(
             _local_shortlist_base_item(
-                source_index=indices[0],
+                source_index=source_index,
                 item_type=item_type,
                 title=title,
-                description_raw=source_lines[indices[0]],
+                description_raw=source_lines[source_index],
                 impact_scope=scope,
                 common_app_honor_description="",
                 missing_or_unclear_facts=missing,
@@ -1516,6 +1552,85 @@ def _local_score(item: dict[str, Any]) -> float:
     )
 
 
+def _canonical_import_key(item: dict[str, Any]) -> str:
+    item_type = str(item.get("type") or "")
+    title_text = _compact_whitespace(str(item.get("title") or "")).lower()
+    text = " ".join(
+        _compact_whitespace(str(item.get(key) or "")).lower()
+        for key in (
+            "title",
+            "organization_name",
+            "role_title",
+            "description_raw",
+            "source_excerpt",
+            "common_app_text",
+        )
+    )
+    known = (
+        ("fizmat ai olympiad", ("fizmat ai olympiad", "faio")),
+        ("central asian startup cup", ("central asian startup cup",)),
+        ("caspian startup", ("caspian startup",)),
+        ("jastarforum science fair", ("jastarforum", "jastar forum")),
+        (
+            "international scientific conference",
+            ("science. technology. algorithmization. programming", "international scientific and practical conference"),
+        ),
+        ("galymind research paper competition", ("galymind",)),
+        ("samsung solve for tomorrow", ("samsung solve for tomorrow",)),
+        ("school computer science olympiad", ("computer science olympiad", "informatics olympiad")),
+        ("kbtu open chess tournament", ("kbtu open",)),
+        ("almaty schools chess tournament", ("almaty", "chess tournament")),
+        ("first-class chess player", ("first-class chess", "first class chess")),
+        ("inclusive academy teaching", ("inclusive academy",)),
+        ("nis peer mentoring", ("8th graders", "8-класс", "peer mentor")),
+        ("yandex lyceum coursework", ("yandex lyceum",)),
+        ("hackorgkz hackathon", ("hackorgkz",)),
+        ("festival of scientific ideas", ("festival of scientific ideas",)),
+        ("ai full-stack web development", ("mpoxdetection", "full-stack", "freelance")),
+    )
+    for canonical, phrases in known:
+        if any(phrase in title_text for phrase in phrases):
+            return f"{item_type}:{canonical}"
+    for canonical, phrases in known:
+        if all(phrase in text for phrase in phrases):
+            return f"{item_type}:{canonical}"
+        if len(phrases) > 1 and any(phrase in text for phrase in phrases):
+            return f"{item_type}:{canonical}"
+
+    stripped = re.sub(r"\b(19|20)\d{2}\b", " ", text)
+    stripped = re.sub(
+        r"\b(award|winner|finalist|semifinalist|semi finalist|medal|bronze|silver|gold|"
+        r"1st|2nd|3rd|place|top|selected|national|international|regional|school)\b",
+        " ",
+        stripped,
+    )
+    stripped = re.sub(r"[^a-z0-9]+", " ", stripped)
+    return f"{item_type}:{_compact_whitespace(stripped)[:140]}"
+
+
+def _dedupe_import_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_key: dict[str, dict[str, Any]] = {}
+
+    def quality(item: dict[str, Any]) -> tuple[int, int, int, int, float]:
+        source = " ".join(
+            _compact_whitespace(str(item.get(key) or "")).lower()
+            for key in ("description_raw", "source_excerpt")
+        )
+        composite_penalty = int("with which i won" in source or "which i won" in source)
+        has_common_app = int(bool(item.get("common_app_text")))
+        has_rank = int(item.get("recommended_rank") is not None)
+        short_evidence = -len(source)
+        return (has_common_app, has_rank, -composite_penalty, short_evidence, _local_score(item))
+
+    for item in items:
+        key = _canonical_import_key(item)
+        existing = by_key.get(key)
+        if existing is None or quality(item) > quality(existing):
+            by_key[key] = item
+
+    return list(by_key.values())
+
+
 class SearchNotConfiguredError(RuntimeError):
     pass
 
@@ -1718,6 +1833,7 @@ def parse_achievement_import(
     if parsed is None:
         parsed = _fallback_parse(ai_text, user, word_limit)
     normalized = _normalize_items(parsed, word_limit, _source_line_map(raw_text))
+    normalized["items"] = _dedupe_import_items(normalized["items"])
     items = normalized["items"]
 
     activities = [item for item in items if item["type"] == AchievementType.activity.value]

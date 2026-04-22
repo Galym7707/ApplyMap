@@ -196,6 +196,69 @@ def _enum_value(value) -> str:
     return getattr(value, "value", str(value))
 
 
+def _canonical_achievement_key(achievement_type: Any, *values: Any) -> str:
+    item_type = _enum_value(achievement_type)
+    title_text = _clean_text(values[0]).lower() if values else ""
+    text = " ".join(_clean_text(value).lower() for value in values if _clean_text(value))
+    known = (
+        ("fizmat ai olympiad", ("fizmat ai olympiad", "faio")),
+        ("central asian startup cup", ("central asian startup cup",)),
+        ("caspian startup", ("caspian startup",)),
+        ("jastarforum science fair", ("jastarforum", "jastar forum")),
+        (
+            "international scientific conference",
+            ("science. technology. algorithmization. programming", "international scientific and practical conference"),
+        ),
+        ("galymind research paper competition", ("galymind",)),
+        ("samsung solve for tomorrow", ("samsung solve for tomorrow",)),
+        ("school computer science olympiad", ("computer science olympiad", "informatics olympiad")),
+        ("kbtu open chess tournament", ("kbtu open",)),
+        ("almaty schools chess tournament", ("almaty", "chess tournament")),
+        ("first-class chess player", ("first-class chess", "first class chess")),
+        ("inclusive academy teaching", ("inclusive academy",)),
+        ("nis peer mentoring", ("8th graders", "8-класс", "peer mentor")),
+        ("yandex lyceum coursework", ("yandex lyceum",)),
+        ("hackorgkz hackathon", ("hackorgkz",)),
+        ("festival of scientific ideas", ("festival of scientific ideas",)),
+        ("ai full-stack web development", ("mpoxdetection", "full-stack", "freelance")),
+    )
+    for canonical, phrases in known:
+        if any(phrase in title_text for phrase in phrases):
+            return f"{item_type}:{canonical}"
+    for canonical, phrases in known:
+        if all(phrase in text for phrase in phrases):
+            return f"{item_type}:{canonical}"
+        if len(phrases) > 1 and any(phrase in text for phrase in phrases):
+            return f"{item_type}:{canonical}"
+
+    stripped = re.sub(r"\b(19|20)\d{2}\b", " ", text)
+    stripped = re.sub(
+        r"\b(award|winner|finalist|semifinalist|semi finalist|medal|bronze|silver|gold|"
+        r"1st|2nd|3rd|place|top|selected|national|international|regional|school)\b",
+        " ",
+        stripped,
+    )
+    stripped = re.sub(r"[^a-z0-9]+", " ", stripped)
+    return f"{item_type}:{_clean_text(stripped)[:140]}"
+
+
+def _import_display_description(item: dict[str, Any], achievement_type: AchievementType) -> str | None:
+    if achievement_type == AchievementType.activity:
+        value = (
+            item.get("common_app_activity_description")
+            or item.get("common_app_text")
+            or item.get("description_raw")
+        )
+    else:
+        value = (
+            item.get("common_app_honor_description")
+            or item.get("common_app_text")
+            or item.get("description_raw")
+            or item.get("title")
+        )
+    return _english_clean_text(value) or None
+
+
 def _truncate(value: str, limit: int) -> str:
     text = _clean_text(value)
     if len(text) <= limit:
@@ -968,17 +1031,54 @@ async def import_all_achievements(
         ).delete(synchronize_session=False)
         db.flush()
 
+    incoming_keys = {
+        _canonical_achievement_key(
+            item.get("type"),
+            item.get("title"),
+            item.get("organization_name"),
+            item.get("role_title"),
+            item.get("description_raw"),
+            item.get("common_app_text"),
+        )
+        for item in parsed["items"]
+    }
+    if incoming_keys:
+        existing_achievements = (
+            db.query(Achievement)
+            .filter(Achievement.user_id == current_user.id)
+            .all()
+        )
+        duplicate_ids = [
+            achievement.id
+            for achievement in existing_achievements
+            if _canonical_achievement_key(
+                achievement.type,
+                achievement.title,
+                achievement.organization_name,
+                achievement.role_title,
+                achievement.description_raw,
+            )
+            in incoming_keys
+        ]
+        if duplicate_ids:
+            db.query(Achievement).filter(
+                Achievement.user_id == current_user.id,
+                Achievement.id.in_(duplicate_ids),
+            ).delete(synchronize_session=False)
+            db.flush()
+
     imported_achievements: list[Achievement] = []
     selection_items: list[tuple[Achievement, dict]] = []
 
     for item in parsed["items"]:
+        achievement_type = AchievementType(item["type"])
         achievement = Achievement(
             user_id=current_user.id,
-            type=AchievementType(item["type"]),
+            type=achievement_type,
             title=item["title"],
             organization_name=item["organization_name"],
             role_title=item["role_title"],
-            description_raw=item["description_raw"],
+            description_raw=_import_display_description(item, achievement_type),
             category=item["category"],
             hours_per_week=item["hours_per_week"],
             weeks_per_year=item["weeks_per_year"],
