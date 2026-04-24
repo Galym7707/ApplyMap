@@ -146,6 +146,7 @@ function SelectionColumn({
 export default function UniversitiesPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [advisorGenerationLock, setAdvisorGenerationLock] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [advisorTargetName, setAdvisorTargetName] = useState<string | null>(null);
   const [advisorProgressIndex, setAdvisorProgressIndex] = useState(0);
@@ -209,7 +210,7 @@ export default function UniversitiesPage() {
   const universities: University[] = universitiesData?.data?.data ?? [];
   const targets: TargetUniversity[] = targetsData?.data?.data ?? [];
   const targetUniversityIds = new Set(targets.map((target) => target.university_id));
-  const isAnyAdvisorGenerating = generatingId !== null;
+  const isAnyAdvisorGenerating = advisorGenerationLock || generatingId !== null;
 
   useEffect(() => {
     if (!profile || loadedSavedPrefs) return;
@@ -278,9 +279,10 @@ export default function UniversitiesPage() {
   });
 
   const handleGenerateReport = async (university: University) => {
-    if (advisorGenerationLockedRef.current) return;
+    if (advisorGenerationLockedRef.current || advisorGenerationLock) return;
 
     advisorGenerationLockedRef.current = true;
+    setAdvisorGenerationLock(true);
     const requestId = advisorGenerationRequestRef.current + 1;
     advisorGenerationRequestRef.current = requestId;
     setGeneratingId(university.id);
@@ -306,6 +308,7 @@ export default function UniversitiesPage() {
         setGeneratingId(null);
         setAdvisorTargetName(null);
         setAdvisorProgressIndex(0);
+        setAdvisorGenerationLock(false);
       }
       advisorGenerationLockedRef.current = false;
     }
@@ -673,7 +676,7 @@ export default function UniversitiesPage() {
           )}
         </section>
 
-        {generatingId && advisorTargetName && (
+        {isAnyAdvisorGenerating && advisorTargetName && (
           <div className="pointer-events-none fixed bottom-6 right-6 z-50 w-[360px] rounded-[28px] border border-white/70 bg-slate-950/96 p-5 text-white shadow-[0_24px_80px_rgba(15,23,42,0.35)] backdrop-blur">
             <div className="flex items-start gap-3">
               <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-emerald-300" />

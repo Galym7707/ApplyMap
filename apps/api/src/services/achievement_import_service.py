@@ -454,6 +454,43 @@ ACTIVITY_PROCESS_KEYWORDS = (
     "improved",
 )
 
+ACTIVITY_METRIC_PATTERNS = (
+    r"\b\d+\+?\s+(?:students?|children|participants?|users?|people|famil(?:y|ies)|teams?|projects?|events?|schools?)\b",
+    r"\btop\s+\d+\s*/\s*\d+\b",
+    r"\b\d+\s*/\s*\d+\s+(?:teams?|participants?)\b",
+    r"\b\d+\+?\s+countries\b",
+    r"\b\d+(?:\.\d+)?\s*(?:hr|hrs|hours)\s*/?\s*(?:per\s*)?(?:week|wk)\b",
+    r"\b\d+\s*(?:wk|wks|weeks)\s*/?\s*(?:per\s*)?(?:year|yr)\b",
+    r"\b(?:\$|₸)?\s?[\d,]+\s*(?:kzt|usd|dollars?)\b",
+    r"\b\d+%\b",
+)
+
+GENERIC_ACTIVITY_OPENERS = (
+    "participated in",
+    "was a member of",
+    "worked on",
+    "activity where",
+    "project where",
+    "this activity",
+    "this project",
+    "responsible for",
+)
+
+GENERIC_ORGANIZATION_VALUES = {
+    "n/a",
+    "na",
+    "none",
+    "unknown",
+    "not enough information yet",
+}
+
+LEADERSHIP_POSITION_LABELS = {
+    LeadershipLevel.founder.value: "Founder",
+    LeadershipLevel.captain.value: "Captain",
+    LeadershipLevel.lead.value: "Lead",
+    LeadershipLevel.member.value: "Member",
+}
+
 
 def _contains_keyword(value: str, keywords: tuple[str, ...]) -> bool:
     text = value.lower()
@@ -676,14 +713,166 @@ def _enforce_common_app_limit(value: str, word_limit: int, achievement_type: str
     return _compact_whitespace(value)
 
 
+def _dedupe_compact_parts(parts: list[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        compact = _compact_whitespace(part)
+        if not compact:
+            continue
+        normalized = re.sub(r"[^a-z0-9]+", " ", compact.lower()).strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(compact)
+    return deduped
+
+
+def _clean_activity_phrase(value: str) -> str:
+    text = _compact_whitespace(value)
+    if not text:
+        return ""
+
+    text = re.sub(r"^(?:i|we)\s+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^(?:as|during|through)\s+", "", text, flags=re.IGNORECASE)
+    for opener in GENERIC_ACTIVITY_OPENERS:
+        text = re.sub(rf"^{re.escape(opener)}\s+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bwith which i won\b.*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bwhich won\b.*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bwon\b.*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\b(received|earned)\b.*?(?:award|medal|prize|place|rank).*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*[,;:-]\s*$", "", text)
+
+    return _compact_whitespace(text)
+
+
+def _activity_source_text(item: dict[str, Any]) -> str:
+    return _compact_whitespace(
+        " ".join(
+            str(item.get(key) or "")
+            for key in (
+                "title",
+                "organization_name",
+                "role_title",
+                "description_raw",
+                "common_app_activity_description",
+                "common_app_text",
+                "source_excerpt",
+            )
+        )
+    )
+
+
+def _activity_metric_fragments(item: dict[str, Any]) -> list[str]:
+    source = _activity_source_text(item)
+    fragments: list[str] = []
+
+    for pattern in ACTIVITY_METRIC_PATTERNS:
+        for match in re.findall(pattern, source, flags=re.IGNORECASE):
+            if isinstance(match, tuple):
+                value = " ".join(str(part) for part in match if str(part))
+            else:
+                value = str(match)
+            compact = _compact_whitespace(value)
+            if compact:
+                fragments.append(compact)
+
+    return _dedupe_compact_parts(fragments)
+
+
+def _activity_position_label(item: dict[str, Any]) -> str:
+    role = _compact_whitespace(str(item.get("role_title") or item.get("common_app_position") or ""))
+    title = _compact_whitespace(str(item.get("title") or ""))
+
+    if role and role.lower() not in {"participant", "member of team"}:
+        position = role
+    else:
+        leadership_level = getattr(item.get("leadership_level"), "value", item.get("leadership_level"))
+        position = LEADERSHIP_POSITION_LABELS.get(str(leadership_level or "").lower(), "")
+        if not position and title and len(title) <= COMMON_APP_ACTIVITY_POSITION_LIMIT:
+            position = title
+
+    if title and position and title.lower() == position.lower():
+        position = title
+
+    return _truncate_characters(position, COMMON_APP_ACTIVITY_POSITION_LIMIT)
+
+
+def _activity_detail_candidates(item: dict[str, Any]) -> list[str]:
+    candidates = [
+        item.get("common_app_activity_description"),
+        item.get("common_app_text"),
+        item.get("description_raw"),
+        item.get("source_excerpt"),
+    ]
+    role = _compact_whitespace(str(item.get("role_title") or ""))
+    title = _compact_whitespace(str(item.get("title") or ""))
+    organization = _compact_whitespace(str(item.get("organization_name") or ""))
+    cleaned_candidates: list[str] = []
+
+    for candidate in candidates:
+        text = _clean_activity_phrase(str(candidate or ""))
+        if not text:
+            continue
+
+        for duplicate in (role, title, organization):
+            if not duplicate:
+                continue
+            text = re.sub(rf"^{re.escape(duplicate)}[\s,:;.-]*", "", text, flags=re.IGNORECASE)
+
+        text = _clean_activity_phrase(text)
+        if len(text) < 12:
+            continue
+        cleaned_candidates.append(text)
+
+    return _dedupe_compact_parts(cleaned_candidates)
+
+
+def _compose_activity_description(item: dict[str, Any], word_limit: int) -> str:
+    detail_candidates = _activity_detail_candidates(item)
+    metric_fragments = _activity_metric_fragments(item)
+
+    chosen_parts: list[str] = []
+    if detail_candidates:
+        chosen_parts.append(detail_candidates[0])
+
+    if detail_candidates[1:]:
+        for candidate in detail_candidates[1:]:
+            if candidate.lower() in chosen_parts[0].lower():
+                continue
+            chosen_parts.append(candidate)
+            break
+
+    if metric_fragments:
+        metrics_text = ", ".join(metric_fragments[:2])
+        if metrics_text and not any(metrics_text.lower() in part.lower() for part in chosen_parts):
+            chosen_parts.append(metrics_text)
+
+    if not chosen_parts:
+        fallback_parts = [
+            _activity_position_label(item),
+            _compact_whitespace(str(item.get("organization_name") or "")),
+            _compact_whitespace(str(item.get("title") or "")),
+        ]
+        chosen_parts = _dedupe_compact_parts(fallback_parts)
+
+    description = "; ".join(part for part in chosen_parts if part)
+    if not description:
+        description = _fallback_common_app_text(item, word_limit)
+
+    return _enforce_common_app_limit(description, word_limit, AchievementType.activity.value)
+
+
 def _activity_position(item: dict[str, Any]) -> str:
-    value = _compact_whitespace(str(item.get("common_app_position") or item.get("role_title") or item.get("title") or ""))
+    value = _activity_position_label(item)
     return _truncate_characters(value, COMMON_APP_ACTIVITY_POSITION_LIMIT)
 
 
 def _activity_organization(item: dict[str, Any]) -> str:
     value = _compact_whitespace(str(item.get("common_app_organization") or item.get("organization_name") or ""))
-    if value.lower() in {"n/a", "na", "none", "unknown", "not enough information yet"} or "implied" in value.lower():
+    if value.lower() in GENERIC_ORGANIZATION_VALUES or "implied" in value.lower():
+        return ""
+    if value and value.lower() == _activity_position_label(item).lower():
         return ""
     return _truncate_characters(value, COMMON_APP_ACTIVITY_ORGANIZATION_LIMIT)
 
@@ -756,12 +945,7 @@ def _activity_type(item: dict[str, Any]) -> str:
 
 
 def _activity_description(item: dict[str, Any], word_limit: int) -> str:
-    value = _compact_whitespace(
-        str(item.get("common_app_activity_description") or item.get("common_app_text") or item.get("description_raw") or "")
-    )
-    if not value:
-        value = _fallback_common_app_text(item, word_limit)
-    return _enforce_common_app_limit(value, word_limit, AchievementType.activity.value)
+    return _compose_activity_description(item, word_limit)
 
 
 def _honor_description(item: dict[str, Any], word_limit: int) -> str:
@@ -809,6 +993,33 @@ def _coerce_recommended_rank(value: Any) -> Optional[int]:
     except (TypeError, ValueError):
         return None
     return rank if rank > 0 else None
+
+
+def _section_rank_sort_key(item: dict[str, Any]) -> tuple[bool, int, float]:
+    return (
+        item.get("recommended_rank") is None,
+        item.get("recommended_rank") or 99,
+        -_local_score(item),
+    )
+
+
+def _normalize_section_ranks(items: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    ranked_items = sorted(items, key=_section_rank_sort_key)
+
+    if not any(item.get("recommended_rank") for item in ranked_items):
+        ranked_items = sorted(items, key=_local_score, reverse=True)
+
+    shortlisted = ranked_items[:limit]
+    shortlisted_ids = {id(item) for item in shortlisted}
+
+    for item in ranked_items:
+        if id(item) not in shortlisted_ids:
+            item["recommended_rank"] = None
+
+    for rank, item in enumerate(shortlisted, start=1):
+        item["recommended_rank"] = rank
+
+    return shortlisted
 
 
 def _coerce_source_index(value: Any, fallback: int) -> int:
@@ -1453,7 +1664,7 @@ def _import_prompt(
         "Tasks:\n"
         "1. Extract distinct achievements. Merge only true duplicates.\n"
         "2. Classify using this rule: Honor = result/recognition; Activity = process/role/contribution/project/work.\n"
-        "3. Set recommended_rank 1-10 for activities and 1-5 for honors. Do not include extra unranked items.\n"
+        "3. Set recommended_rank relative within each section: activities use 1-10 among activities only, honors use 1-5 among honors only. Do not use one global rank across mixed item types, and do not include extra unranked items.\n"
         "4. Output polished English only.\n\n"
         "Activity candidates may include personal software projects, freelance work, teaching, mentoring, volunteering, "
         "structured coursework, hackathons, competitive chess, scientific-project participation, and sustained competitive "
@@ -1468,6 +1679,9 @@ def _import_prompt(
         f"- Activity organization <= {COMMON_APP_ACTIVITY_ORGANIZATION_LIMIT} characters.\n"
         f"- Activity description <= {COMMON_APP_ACTIVITY_DESCRIPTION_LIMIT} characters.\n"
         f"- Honor description <= {COMMON_APP_HONOR_DESCRIPTION_LIMIT} characters; start with year if known, then award/context/level.\n"
+        "- Activities must read like final Common App copy: start with the strongest action, then add scope/result/metrics; avoid filler like 'participated in' or 'worked on'.\n"
+        "- Prefer concrete verbs such as built, led, taught, researched, organized, launched, mentored, published, or coached.\n"
+        "- Titles and position fields should be compact and professional, not full sentences.\n"
         "- If one story appears in both sections, do not copy-paste. Honors show recognition; Activities show work, role, scale, and impact.\n\n"
         "Important constraints:\n"
         "- Do not invent achievements, outcomes, metrics, organizations, dates, leadership roles, or awards.\n"
@@ -1839,44 +2053,14 @@ def parse_achievement_import(
     activities = [item for item in items if item["type"] == AchievementType.activity.value]
     honors = [item for item in items if item["type"] == AchievementType.honor.value]
 
-    ranked_activities = sorted(
-        activities,
-        key=lambda item: (
-            item.get("recommended_rank") is None,
-            item.get("recommended_rank") or 99,
-            -_local_score(item),
-        ),
-    )
-    ranked_honors = sorted(
-        honors,
-        key=lambda item: (
-            item.get("recommended_rank") is None,
-            item.get("recommended_rank") or 99,
-            -_local_score(item),
-        ),
-    )
-
-    if not any(item.get("recommended_rank") for item in ranked_activities):
-        for rank, item in enumerate(sorted(activities, key=_local_score, reverse=True)[:MAX_TOP_ACTIVITIES], start=1):
-            item["recommended_rank"] = rank
-        ranked_activities = sorted(activities, key=lambda item: item.get("recommended_rank") or 99)
-
-    if not any(item.get("recommended_rank") for item in ranked_honors):
-        for rank, item in enumerate(sorted(honors, key=_local_score, reverse=True)[:MAX_TOP_HONORS], start=1):
-            item["recommended_rank"] = rank
-        ranked_honors = sorted(honors, key=lambda item: item.get("recommended_rank") or 99)
+    ranked_activities = _normalize_section_ranks(activities, MAX_TOP_ACTIVITIES)
+    ranked_honors = _normalize_section_ranks(honors, MAX_TOP_HONORS)
 
     normalized["strongest_angle"] = normalized["strongest_angle"] or (
         "Lead with the most selective, sustained, and distinctive work, then support it with the strongest honors."
     )
-    normalized["top_activities"] = [
-        item
-        for item in ranked_activities
-        if item.get("recommended_rank") and item["recommended_rank"] <= MAX_TOP_ACTIVITIES
-    ][:MAX_TOP_ACTIVITIES]
-    normalized["top_honors"] = [
-        item for item in ranked_honors if item.get("recommended_rank") and item["recommended_rank"] <= MAX_TOP_HONORS
-    ][:MAX_TOP_HONORS]
+    normalized["top_activities"] = ranked_activities
+    normalized["top_honors"] = ranked_honors
     verification_notes = _attach_google_verification(
         [*normalized["top_activities"], *normalized["top_honors"]],
         user,

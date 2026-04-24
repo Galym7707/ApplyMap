@@ -331,6 +331,7 @@ export default function ReportDetailPage({ params }: { params: { id: string } })
   }
 
   const advisor = report.advisor_snapshot_json;
+  const summaryText = report.summary_text?.trim();
   const intendedMajor = advisor?.target_major || profile?.intended_major || report.university.major_strengths?.[0] || "your target major";
   const inProgress = report.status === "pending" || report.status === "processing";
   const isLegacyCompletedReport = report.status === "completed" && !advisor;
@@ -364,7 +365,7 @@ export default function ReportDetailPage({ params }: { params: { id: string } })
                 {report.university.name}
               </h1>
               <p className="mt-3 text-sm leading-relaxed text-slate-500">
-                {advisor?.subtitle ?? "This report was generated before versioned advisor snapshots were stored."}
+                {advisor?.subtitle ?? summaryText ?? "This report was generated before versioned advisor snapshots were stored."}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Badge variant="outline">{report.university.country}</Badge>
@@ -395,11 +396,23 @@ export default function ReportDetailPage({ params }: { params: { id: string } })
                 Export
               </Button>
               <p className="mt-3 text-xs leading-relaxed text-slate-500">
-                {advisor?.report_note ?? report.summary_text ?? "This view is intentionally university-first: school, major, funding route, and next moves."}
+                {advisor?.report_note ?? summaryText ?? "This view is intentionally university-first: school, major, funding route, and next moves."}
               </p>
             </div>
           </div>
         </section>
+
+        {!!summaryText && (
+          <section className="mt-6 rounded-[32px] border border-white/70 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur sm:p-8">
+            <div className="flex items-center gap-2 text-slate-900">
+              <ReceiptText className="h-4 w-4 text-navy-700" />
+              <h2 className="text-lg font-semibold">Stored report summary</h2>
+            </div>
+            <p className="mt-4 max-w-4xl text-sm leading-relaxed text-slate-600">
+              {summaryText}
+            </p>
+          </section>
+        )}
 
         {inProgress && (
           <section className="mt-6 rounded-[32px] border border-white/70 bg-white/90 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur sm:p-8">

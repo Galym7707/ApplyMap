@@ -693,6 +693,35 @@ def _fill_selection_from_vault(
     return selection
 
 
+def _build_import_shortlist_selection(
+    shortlist_items: list[dict],
+    selection_items: list[tuple[Achievement, dict]],
+    user: Any | None = None,
+    word_limit: int | None = None,
+) -> list[dict]:
+    achievement_by_item_id = {
+        id(item): achievement
+        for achievement, item in selection_items
+    }
+    selection: list[dict] = []
+
+    for rank, item in enumerate(shortlist_items, start=1):
+        achievement = achievement_by_item_id.get(id(item))
+        if not achievement:
+            continue
+        selection.append(
+            _selection_from_parsed_item(
+                achievement,
+                item,
+                rank,
+                user,
+                word_limit,
+            )
+        )
+
+    return selection
+
+
 @router.get("", response_model=dict)
 def list_achievements(
     type: Optional[AchievementType] = None,
@@ -1099,30 +1128,18 @@ async def import_all_achievements(
     for achievement in imported_achievements:
         db.refresh(achievement)
 
-    activity_selection = []
-    honor_selection = []
-
-    for achievement, item in selection_items:
-        try:
-            rank = int(item.get("recommended_rank") or 0)
-        except (TypeError, ValueError):
-            rank = 0
-        if not rank:
-            continue
-        selection_item = _selection_from_parsed_item(
-            achievement,
-            item,
-            rank,
-            current_user,
-            word_limit,
-        )
-        if achievement.type == AchievementType.activity and rank <= 10:
-            activity_selection.append(selection_item)
-        if achievement.type == AchievementType.honor and rank <= 5:
-            honor_selection.append(selection_item)
-
-    activity_selection.sort(key=lambda item: item["rank"])
-    honor_selection.sort(key=lambda item: item["rank"])
+    activity_selection = _build_import_shortlist_selection(
+        parsed.get("top_activities", []),
+        selection_items,
+        current_user,
+        word_limit,
+    )
+    honor_selection = _build_import_shortlist_selection(
+        parsed.get("top_honors", []),
+        selection_items,
+        current_user,
+        word_limit,
+    )
 
     return {
         "data": AchievementImportOut(
