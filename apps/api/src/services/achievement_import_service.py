@@ -273,8 +273,17 @@ def _source_line_map(raw_text: str) -> dict[int, str]:
             continue
         numbered = re.match(r"^(\d+)\)\s*(.+)$", line)
         if numbered:
-            source_lines[int(numbered.group(1))] = line
+            numbered_index = int(numbered.group(1))
+            if numbered_index not in source_lines:
+                source_lines[numbered_index] = line
+            else:
+                while fallback_index in source_lines:
+                    fallback_index += 1
+                source_lines[fallback_index] = line
+                fallback_index += 1
             continue
+        while fallback_index in source_lines:
+            fallback_index += 1
         source_lines.setdefault(fallback_index, line)
         fallback_index += 1
     return source_lines
@@ -733,6 +742,7 @@ def _clean_activity_phrase(value: str) -> str:
     if not text:
         return ""
 
+    text = re.sub(r"^\d+\s*\)\s*", "", text)
     text = re.sub(r"^(?:i|we)\s+", "", text, flags=re.IGNORECASE)
     text = re.sub(r"^(?:as|during|through)\s+", "", text, flags=re.IGNORECASE)
     for opener in GENERIC_ACTIVITY_OPENERS:
@@ -828,7 +838,22 @@ def _activity_detail_candidates(item: dict[str, Any]) -> list[str]:
     return _dedupe_compact_parts(cleaned_candidates)
 
 
+def _looks_like_noisy_source_fragment(value: str) -> bool:
+    text = _compact_whitespace(value)
+    if not text:
+        return True
+    if re.match(r"^\d+\s*\)", text):
+        return True
+    if re.search(r"[А-Яа-яЁё]", text):
+        return True
+    return False
+
+
 def _compose_activity_description(item: dict[str, Any], word_limit: int) -> str:
+    preset_description = _compact_whitespace(str(item.get("common_app_activity_description") or ""))
+    if preset_description and len(preset_description) >= 24:
+        return _enforce_common_app_limit(preset_description, word_limit, AchievementType.activity.value)
+
     detail_candidates = _activity_detail_candidates(item)
     metric_fragments = _activity_metric_fragments(item)
 
@@ -836,9 +861,11 @@ def _compose_activity_description(item: dict[str, Any], word_limit: int) -> str:
     if detail_candidates:
         chosen_parts.append(detail_candidates[0])
 
-    if detail_candidates[1:]:
+    if detail_candidates[1:] and len(chosen_parts[0]) < 90:
         for candidate in detail_candidates[1:]:
             if candidate.lower() in chosen_parts[0].lower():
+                continue
+            if _looks_like_noisy_source_fragment(candidate):
                 continue
             chosen_parts.append(candidate)
             break
@@ -1371,7 +1398,7 @@ def _build_fast_local_shortlist(raw_text: str) -> list[dict[str, Any]]:
             )
         )
 
-    hackathon_indices = find_indices("hackorgkz")
+    hackathon_indices = find_indices("hackorgkz", "hackorgz")
     if hackathon_indices:
         items.append(
             _local_shortlist_base_item(
@@ -1396,6 +1423,36 @@ def _build_fast_local_shortlist(raw_text: str) -> list[dict[str, Any]]:
                 selectivity=5,
                 continuity=2,
                 distinctiveness=4,
+            )
+        )
+
+    programming_indices = sorted(
+        set(find_indices("informatics olympiad", "olympiad in informatics", "computer science olympiad", "acmp.ru", "codeforces"))
+    )
+    if programming_indices:
+        items.append(
+            _local_shortlist_base_item(
+                source_index=programming_indices[0],
+                item_type=AchievementType.activity,
+                title="Competitive Programming and Informatics",
+                organization_name="School / Independent Practice",
+                role_title="Competitor",
+                description_raw=combined_text(programming_indices),
+                category="Computer/Technology",
+                impact_scope=ImpactScope.school,
+                leadership_level=LeadershipLevel.member,
+                common_app_activity_type="Computer/Technology",
+                common_app_position="Competitor",
+                common_app_organization="School / Independent Practice",
+                common_app_activity_description=(
+                    "Practiced Python/C++ through informatics olympiad prep and online problem-solving platforms."
+                ),
+                missing_or_unclear_facts=["Years of participation, hours/week, and strongest results beyond school stage."],
+                rank=6,
+                major=8,
+                selectivity=4,
+                continuity=5,
+                distinctiveness=5,
             )
         )
 
@@ -1451,6 +1508,73 @@ def _build_fast_local_shortlist(raw_text: str) -> list[dict[str, Any]]:
             )
         )
 
+    research_indices = sorted(
+        set(
+            find_indices(
+                "science. technology. algorithmization. programming",
+                "galymind",
+                "jastarforum",
+                "festival of scientific ideas",
+            )
+        )
+    )
+    if research_indices:
+        items.append(
+            _local_shortlist_base_item(
+                source_index=research_indices[0],
+                item_type=AchievementType.activity,
+                title="Independent STEM Research Projects",
+                organization_name="Independent / School Competitions",
+                role_title="Researcher",
+                description_raw=combined_text(research_indices),
+                category="Research",
+                impact_scope=ImpactScope.national,
+                leadership_level=LeadershipLevel.lead,
+                common_app_activity_type="Research",
+                common_app_position="Researcher",
+                common_app_organization="Independent / School Competitions",
+                common_app_activity_description=(
+                    "Developed independent STEM research projects for science fairs and student research competitions."
+                ),
+                missing_or_unclear_facts=["Project topics, research timeline, and whether work was individual or team-based."],
+                rank=7,
+                major=8,
+                selectivity=6,
+                continuity=4,
+                distinctiveness=6,
+            )
+        )
+
+    startup_indices = sorted(
+        set(find_indices("caspian startup", "central asian startup", "samsung solve for tomorrow"))
+    )
+    if startup_indices:
+        items.append(
+            _local_shortlist_base_item(
+                source_index=startup_indices[0],
+                item_type=AchievementType.activity,
+                title="Startup Product Pitching and Innovation",
+                organization_name="Independent Startup Competitions",
+                role_title="Founder / Pitch Competitor",
+                description_raw=combined_text(startup_indices),
+                category="Career Oriented",
+                impact_scope=ImpactScope.international,
+                leadership_level=LeadershipLevel.founder,
+                common_app_activity_type="Career Oriented",
+                common_app_position="Founder / Pitch Competitor",
+                common_app_organization="Independent Startup Competitions",
+                common_app_activity_description=(
+                    "Built and pitched startup ideas in innovation competitions across Kazakhstan and Central Asia."
+                ),
+                missing_or_unclear_facts=["Specific startup idea, your role, and whether the same project was used across competitions."],
+                rank=9,
+                major=7,
+                selectivity=6,
+                continuity=4,
+                distinctiveness=6,
+            )
+        )
+
     honor_specs = [
         (
             find_indices("fizmat ai olympiad", "faio"),
@@ -1462,7 +1586,7 @@ def _build_fast_local_shortlist(raw_text: str) -> list[dict[str, Any]]:
             1,
             8,
             ImpactScope.national,
-            ["Confirm the exact award year."],
+            [],
         ),
         (
             find_indices("science. technology. algorithmization. programming"),
@@ -1486,7 +1610,7 @@ def _build_fast_local_shortlist(raw_text: str) -> list[dict[str, Any]]:
             1,
             7,
             ImpactScope.national,
-            ["Confirm the exact award year."],
+            [],
         ),
         (
             find_indices("central asian startup cup"),
@@ -1498,7 +1622,7 @@ def _build_fast_local_shortlist(raw_text: str) -> list[dict[str, Any]]:
             1,
             7,
             ImpactScope.international,
-            ["Confirm the exact award year."],
+            [],
         ),
         (
             find_indices("caspian startup"),
@@ -1509,7 +1633,31 @@ def _build_fast_local_shortlist(raw_text: str) -> list[dict[str, Any]]:
             8,
             1,
             7,
-            ImpactScope.international,
+            ImpactScope.national,
+            [],
+        ),
+        (
+            find_indices("samsung solve for tomorrow"),
+            "Samsung Solve for Tomorrow",
+            AchievementType.honor,
+            6,
+            7,
+            7,
+            1,
+            6,
+            ImpactScope.national,
+            [],
+        ),
+        (
+            find_indices("galymind"),
+            "Galymind Research Competition",
+            AchievementType.honor,
+            7,
+            7,
+            7,
+            1,
+            6,
+            ImpactScope.national,
             [],
         ),
     ]
@@ -1554,7 +1702,7 @@ def _fallback_parse(raw_text: str, user: Optional[Any], word_limit: int) -> dict
             "additional_information_reason": "",
             "additional_information_draft": "",
             "formatting_notes": [
-                "Gemini did not finish within the upload timeout, so ApplyMap used the fast local Chancellor formatter."
+                "Gemini did not finish in time for this upload, so ApplyMap used the local Chancellor fallback to keep the shortlist moving."
             ],
             "extraction_notes": [
                 f"Fast local fallback built {len(local_shortlist_items)} Common App-ready candidates from numbered source lines."
@@ -1902,11 +2050,11 @@ def _format_search_note(result: dict[str, str]) -> str:
 def _attach_google_verification(items: list[dict[str, Any]], user: Optional[Any]) -> list[str]:
     if not settings.GOOGLE_SEARCH_API_KEY.strip() or not settings.GOOGLE_SEARCH_ENGINE_ID.strip():
         return [
-            "Google Search is not configured. Set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID to verify achievements online."
+            "Online verification was unavailable for this upload. Verify final claims with certificates, official results pages, or organizer links."
         ]
     if GOOGLE_VERIFICATION_TIME_BUDGET_SECONDS <= 0:
         return [
-            "Online verification is skipped during file import to keep upload responsive; verify final claims from certificates or official links."
+            "Online verification was skipped during import to keep the upload fast. Verify final claims with certificates, official results pages, or organizer links."
         ]
 
     notes: list[str] = []

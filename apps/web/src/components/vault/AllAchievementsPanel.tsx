@@ -171,7 +171,13 @@ function getClarificationFields(question: string): ClarificationField[] {
     }
   };
 
-  if (normalized.includes("exact year") || /\byear\b/.test(normalized)) {
+  const mentionsExactYear =
+    normalized.includes("exact year") ||
+    (/\byear\b/.test(normalized) &&
+      !normalized.includes("weeks per year") &&
+      !normalized.includes("weeks/year") &&
+      !normalized.includes("wks/year"));
+  if (mentionsExactYear) {
     addField({ key: "year", label: "Exact year", type: "text", placeholder: "e.g. 2025" });
   }
   if (normalized.includes("grade level") || normalized.includes("participation grade")) {
@@ -236,6 +242,12 @@ function getActionableClarificationQuestions(questions: string[]) {
     if (!normalized) return false;
     return !genericReviewPhrases.some((phrase) => normalized.includes(phrase));
   });
+}
+
+function getClarificationAnswerKeys(questions: string[], scope: string) {
+  return questions.flatMap((question, index) =>
+    getClarificationFields(question).map((field) => `${scope}:${index}:${question}:${field.key}`)
+  );
 }
 
 function ClarificationFields({
@@ -595,12 +607,33 @@ export function AllAchievementsPanel({
   activityCount: number;
   honorCount: number;
 }) {
-  const hasClarificationAnswers = Object.values(clarificationAnswers).some((value) => value.trim().length > 0);
   const isWorking = isImporting || isBuildingFromVault;
   const latestRunCount =
     result?.file_name === "Current Vault"
       ? result.top_activities.length + result.top_honors.length
       : result?.imported_count ?? 0;
+  const requiredClarificationKeys = result
+    ? [
+        ...getClarificationAnswerKeys(result.clarifying_questions ?? [], "global"),
+        ...(result.top_activities ?? []).flatMap((item) =>
+          getClarificationAnswerKeys(
+            getActionableClarificationQuestions(item.missing_or_unclear_facts ?? []),
+            `item:${item.achievement_id}`
+          )
+        ),
+        ...(result.top_honors ?? []).flatMap((item) =>
+          getClarificationAnswerKeys(
+            getActionableClarificationQuestions(item.missing_or_unclear_facts ?? []),
+            `item:${item.achievement_id}`
+          )
+        ),
+      ]
+    : [];
+  const hasRequiredClarifications = requiredClarificationKeys.every(
+    (key) => (clarificationAnswers[key] ?? "").trim().length > 0
+  );
+  const hasClarificationQuestions = requiredClarificationKeys.length > 0;
+  const canSubmitReanalysis = canReanalyze && (!hasClarificationQuestions || hasRequiredClarifications);
 
   return (
     <div className="space-y-6">
@@ -635,10 +668,6 @@ export function AllAchievementsPanel({
                   <h3 className="text-sm font-semibold text-slate-900">Supported formats</h3>
                   <p className="mt-1 text-sm text-slate-600">
                     `.pdf`, `.docx`, `.txt`, `.md`, `.csv`, or `.json` files are supported.
-                  </p>
-                  <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                    Best input shape: one note or bullet list with awards, leadership, volunteering,
-                    competitions, research, and activities all mixed together.
                   </p>
                 </div>
               </div>
@@ -757,7 +786,7 @@ export function AllAchievementsPanel({
                 variant="outline"
                 className="w-full gap-2 lg:w-auto"
                 onClick={onReanalyze}
-                disabled={isWorking || !hasClarificationAnswers || !canReanalyze}
+                disabled={isWorking || !canSubmitReanalysis}
               >
                 {isWorking ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -770,6 +799,11 @@ export function AllAchievementsPanel({
             {!canReanalyze && (
               <p className="mt-3 text-xs leading-relaxed text-amber-700">
                 Reanalysis needs the original file in this browser session. Upload the file again, then answer the fields.
+              </p>
+            )}
+            {canReanalyze && hasClarificationQuestions && !hasRequiredClarifications && (
+              <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                Fill every requested field below to unlock reanalysis with your answers.
               </p>
             )}
           </div>
