@@ -636,7 +636,34 @@ export default function VaultPage() {
         previousImportIds,
       }),
     onSuccess: (response) => {
-      const result = response.data.data as AchievementImportResult;
+      const payload = response.data.data as
+        | AchievementImportResult
+        | { needs_manual_entry: true; reason: string; partial_text: string; confidence: number | null };
+
+      if (payload && "needs_manual_entry" in payload && payload.needs_manual_entry) {
+        // OCR could not read the document confidently; prompt manual entry.
+        setImportProgress((current) =>
+          current ? { ...current, currentStepIndex: 3 } : current
+        );
+        toast.info(
+          payload.reason ||
+            "We couldn't read this file confidently. Please enter the achievement manually."
+        );
+        if (payload.partial_text) {
+          try {
+            localStorage.setItem(
+              "applymap.ocrManualDraft",
+              JSON.stringify({
+                draft: payload.partial_text,
+                confidence: payload.confidence,
+              })
+            );
+          } catch {}
+        }
+        return;
+      }
+
+      const result = payload as AchievementImportResult;
       setAllImportResult(result);
       setImportProgress((current) =>
         current ? { ...current, currentStepIndex: 5 } : current
@@ -669,7 +696,7 @@ export default function VaultPage() {
         "response" in error &&
         typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
           ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
-          : "Import failed because the server connection dropped. Try a smaller text-based PDF, DOCX, TXT, MD, CSV, or JSON file; scanned image PDFs are not supported yet.";
+          : "Import failed because the server connection dropped. Try a smaller text-based PDF, DOCX, TXT, MD, CSV, JSON, or image file (PNG/JPG); for scanned PDFs OCR may take a moment.";
       toast.error(detail);
     },
   });

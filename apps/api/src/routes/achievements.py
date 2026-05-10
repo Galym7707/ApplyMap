@@ -21,6 +21,7 @@ from ..models.achievement import Achievement, AchievementEvidenceFile, Achieveme
 from ..routes.auth import get_current_user
 from ..services.chancellor_analysis import estimate_chancellor_scores
 from ..services.achievement_import_service import decode_import_file, parse_achievement_import
+from ..services.ocr_service import OCRRequiresManualEntry
 
 router = APIRouter(prefix="/api/achievements", tags=["achievements"])
 
@@ -1010,6 +1011,18 @@ async def import_all_achievements(
     raw_bytes = await file.read()
     try:
         raw_text = decode_import_file(file.filename or "import.txt", raw_bytes)
+    except OCRRequiresManualEntry as ocr_exc:
+        # Surface a structured payload so the frontend can route the user
+        # to the manual-entry form instead of treating this as a hard error.
+        return {
+            "data": {
+                "needs_manual_entry": True,
+                "reason": ocr_exc.reason,
+                "partial_text": ocr_exc.partial_text,
+                "confidence": ocr_exc.confidence,
+            },
+            "message": "OCR could not extract usable text; collect the achievement details manually.",
+        }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

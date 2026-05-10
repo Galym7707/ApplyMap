@@ -8,6 +8,12 @@ import httpx
 
 from ..config import settings
 from ..models.achievement import AchievementType, ImpactScope, LeadershipLevel
+from .ocr_service import (
+    IMAGE_EXTENSIONS,
+    OCRRequiresManualEntry,
+    extract_image_text,
+    extract_scanned_pdf_text,
+)
 
 MAX_IMPORT_BYTES = 10_000_000
 MAX_IMPORT_CHARS = 80_000
@@ -1124,16 +1130,25 @@ def decode_import_file(file_name: str, raw_bytes: bytes) -> str:
         raise ValueError("File is too large for import. Keep it under 10 MB.")
 
     extension = os.path.splitext(file_name or "")[1].lower()
-    supported = {".txt", ".md", ".csv", ".json", ".pdf", ".docx"}
+    supported = {".txt", ".md", ".csv", ".json", ".pdf", ".docx"} | IMAGE_EXTENSIONS
     if extension and extension not in supported:
         raise ValueError(
-            "Import supports .txt, .md, .csv, .json, .pdf, and .docx files."
+            "Import supports .txt, .md, .csv, .json, .pdf, .docx, and image files (.png, .jpg, .jpeg, .tif, .tiff, .bmp, .webp)."
         )
 
     if extension == ".pdf":
-        text = _extract_pdf_text(raw_bytes)
+        try:
+            text = _extract_pdf_text(raw_bytes)
+        except ValueError as text_pdf_err:
+            # Likely a scanned PDF; try OCR before giving up.
+            try:
+                text = extract_scanned_pdf_text(raw_bytes).text
+            except OCRRequiresManualEntry:
+                raise text_pdf_err
     elif extension == ".docx":
         text = _extract_docx_text(raw_bytes)
+    elif extension in IMAGE_EXTENSIONS:
+        text = extract_image_text(raw_bytes).text
     else:
         for encoding in ("utf-8", "utf-8-sig", "utf-16", "cp1251", "latin-1"):
             try:
