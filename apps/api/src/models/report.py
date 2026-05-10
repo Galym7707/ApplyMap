@@ -35,6 +35,18 @@ class SourceSection(str, enum.Enum):
     recommendation_support = "recommendation_support"
 
 
+class SourceClassification(str, enum.Enum):
+    """Where a recommendation's evidence comes from.
+
+    Used to keep ApplyMap honest: official policies vs. public examples
+    vs. system-derived heuristics must never be presented the same way.
+    """
+
+    official = "official"
+    public_example = "public_example"
+    system_suggestion = "system_suggestion"
+
+
 class TargetUniversity(Base):
     __tablename__ = "target_universities"
 
@@ -81,6 +93,12 @@ class ReportRecommendation(Base):
     suggested_rank = Column(Integer, nullable=True)
     rationale = Column(Text, nullable=True)
     confidence_label = Column(Enum(ConfidenceLabel), nullable=False, default=ConfidenceLabel.medium)
+    source_classification = Column(
+        Enum(SourceClassification),
+        nullable=False,
+        default=SourceClassification.system_suggestion,
+    )
+    transparency_note = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships

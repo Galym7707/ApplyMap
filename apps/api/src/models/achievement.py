@@ -31,6 +31,45 @@ class LeadershipLevel(str, enum.Enum):
     captain = "captain"
 
 
+class ActivityCategory(str, enum.Enum):
+    """Extended categorical taxonomy for activities.
+
+    Goes beyond the legacy academic/leadership/service split so reports can
+    show a balanced cross-section of a student's life (Common App's
+    Activities section recognizes ~30 categories — we group them into the
+    most common buckets that admissions readers look for).
+    """
+
+    academic = "academic"
+    leadership = "leadership"
+    service = "service"
+    family_responsibility = "family_responsibility"
+    paid_work = "paid_work"
+    volunteering = "volunteering"
+    community_initiative = "community_initiative"
+    research = "research"
+    business = "business"
+    technical = "technical"
+    arts = "arts"
+    athletics = "athletics"
+    religious = "religious"
+    other = "other"
+
+
+class ActivityRole(str, enum.Enum):
+    """How a single achievement contributes to the overall narrative.
+
+    - anchor: defines the student's strongest spike. The report should keep
+      one or two anchors at the top.
+    - supporting: reinforces an anchor (same theme, same skill set).
+    - contextual: rounds out the profile (different domain, shows breadth).
+    """
+
+    anchor = "anchor"
+    supporting = "supporting"
+    contextual = "contextual"
+
+
 class Achievement(Base):
     __tablename__ = "achievements"
 
@@ -51,6 +90,9 @@ class Achievement(Base):
 
     impact_scope = Column(Enum(ImpactScope), nullable=True)
     leadership_level = Column(Enum(LeadershipLevel), nullable=True)
+
+    activity_category = Column(Enum(ActivityCategory), nullable=True)
+    activity_role = Column(Enum(ActivityRole), nullable=True)
 
     # Computed Chancellor scores (0-10)
     major_relevance_score = Column(Float, nullable=True)
