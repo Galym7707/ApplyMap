@@ -2,7 +2,13 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, date
 from uuid import UUID
-from ..models.achievement import AchievementType, ImpactScope, LeadershipLevel
+from ..models.achievement import (
+    AchievementType,
+    ActivityCategory,
+    ActivityRole,
+    ImpactScope,
+    LeadershipLevel,
+)
 
 
 class AchievementCreate(BaseModel):
@@ -18,6 +24,8 @@ class AchievementCreate(BaseModel):
     weeks_per_year: Optional[int] = Field(None, ge=0, le=52)
     impact_scope: Optional[ImpactScope] = None
     leadership_level: Optional[LeadershipLevel] = None
+    activity_category: Optional[ActivityCategory] = None
+    activity_role: Optional[ActivityRole] = None
     truth_risk_flag: Optional[bool] = None
 
 
@@ -33,6 +41,8 @@ class AchievementUpdate(BaseModel):
     weeks_per_year: Optional[int] = Field(None, ge=0, le=52)
     impact_scope: Optional[ImpactScope] = None
     leadership_level: Optional[LeadershipLevel] = None
+    activity_category: Optional[ActivityCategory] = None
+    activity_role: Optional[ActivityRole] = None
     truth_risk_flag: Optional[bool] = None
 
 
@@ -69,6 +79,8 @@ class AchievementOut(BaseModel):
     weeks_per_year: Optional[int] = None
     impact_scope: Optional[ImpactScope] = None
     leadership_level: Optional[LeadershipLevel] = None
+    activity_category: Optional[ActivityCategory] = None
+    activity_role: Optional[ActivityRole] = None
     major_relevance_score: Optional[float] = None
     continuity_score: Optional[float] = None
     selectivity_score: Optional[float] = None

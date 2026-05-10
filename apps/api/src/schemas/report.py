@@ -2,7 +2,13 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
-from ..models.report import ReportStatus, RecommendationType, ConfidenceLabel, SourceSection
+from ..models.report import (
+    ConfidenceLabel,
+    RecommendationType,
+    ReportStatus,
+    SourceClassification,
+    SourceSection,
+)
 from .achievement import AchievementOut
 from .university import UniversityListOut, PolicyEntryOut
 
@@ -33,6 +39,8 @@ class RecommendationOut(BaseModel):
     suggested_rank: Optional[int] = None
     rationale: Optional[str] = None
     confidence_label: ConfidenceLabel
+    source_classification: SourceClassification = SourceClassification.system_suggestion
+    transparency_note: Optional[str] = None
     created_at: datetime
     achievement: AchievementOut
 
