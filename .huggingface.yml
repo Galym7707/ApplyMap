@@ -1,0 +1,108 @@
+---
+# Hugging Face Space Configuration for ApplyMap
+title: ApplyMap - AI Educational Navigator
+emoji: 🎓
+colorFrom: blue
+colorTo: purple
+sdk: docker
+sdk_version: "20.10"
+app_file: docker-compose.yml
+pinned: false
+license: mit
+tags:
+  - education
+  - edtech
+  - college-admissions
+  - educational-equity
+  - kazakhstan
+  - central-asia
+  - ai-counselor
+  - scholarship
+  - university-applications
+  - fastapi
+  - nextjs
+  - gemini
+datasets: []
+models:
+  - google/gemini-2.0-flash
+languages:
+  - en
+  - ru
+  - kk
+library_name: fastapi
+pipeline_tag: text-generation
+---
+
+# ApplyMap: AI-Powered Educational Navigation
+
+**Democratizing access to quality university counseling for underserved communities.**
+
+## 🌍 Problem
+
+- **3.8M** high school students in Kazakhstan
+- **1.56M** in rural areas without counseling access
+- **$2,000-5,000** average cost of private counselors (unaffordable for 85%)
+- **90,333** students study abroad, mostly without systematic guidance
+
+## 💡 Solution
+
+ApplyMap provides free AI-powered counseling that:
+- Analyzes student achievements in 5 minutes
+- Recommends suitable universities with funding opportunities
+- Optimizes applications for Common App and international systems
+- Works offline for rural areas with weak internet
+- Supports Kazakh, Russian, and English
+
+## 🚀 Features
+
+- **Achievement Vault**: Import and analyze activities/honors from documents
+- **AI Scoring**: 4-dimensional analysis (relevance, selectivity, continuity, distinctiveness)
+- **University Matching**: 200+ universities with funding information
+- **Application Optimizer**: Generates optimized text within character limits
+- **Multilingual**: Kazakh, Russian, English support
+- **Offline Mode**: PWA for areas with limited connectivity
+
+## 📊 Impact
+
+**Target:** 10,000+ students by end of 2026
+
+**Expected Outcomes:**
+- 30% increase in scholarship applications
+- 50% reduction in unsuitable applications
+- $5M saved on counseling fees
+
+## 🛠️ Tech Stack
+
+- **Backend**: FastAPI + PostgreSQL + SQLAlchemy
+- **Frontend**: Next.js 14 + TypeScript + Tailwind CSS
+- **AI**: Google Gemini 2.0 Flash
+- **Document Processing**: pdfplumber + python-docx
+
+## 📖 Documentation
+
+- [GitHub Repository](https://github.com/Galym7707/ApplyMap)
+- [Model Card](./HUGGINGFACE.md)
+- [README](./README.md)
+- [Architecture Guide](./CLAUDE.md)
+
+## 🤝 MIT Solve 2026
+
+ApplyMap is being developed for MIT Solve 2026 submission, focusing on:
+- **Education** challenge track
+- **Economic Prosperity** through access to higher education
+- **Reducing Inequality** in educational opportunities
+
+## 📄 License
+
+MIT License - Open source for educational equity
+
+## 🙏 Acknowledgments
+
+Built with support from:
+- Google Gemini API
+- Open source community
+- Educational counselors in Kazakhstan
+
+---
+
+*For questions or collaboration: [GitHub Issues](https://github.com/Galym7707/ApplyMap/issues)*
