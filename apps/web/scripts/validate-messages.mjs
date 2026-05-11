@@ -1,31 +1,40 @@
 /**
  * Validates that every locale exports the same set of keys.
  *
- * Run with:  pnpm --filter @applymap/web exec tsx scripts/validate-messages.ts
+ * Run with:  node scripts/validate-messages.mjs
  *
  * Exits non-zero if any locale has missing or extra keys vs the English
  * source-of-truth, so it can be wired into CI to prevent shipping a
  * half-translated UI.
+ *
+ * Plain ESM JavaScript — no build step required, runs everywhere Node
+ * runs. This avoids dragging in tsx / ts-node just for one script.
  */
-import enMessages from "../src/i18n/messages/en.json";
-import ruMessages from "../src/i18n/messages/ru.json";
-import kkMessages from "../src/i18n/messages/kk.json";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
+const here = dirname(fileURLToPath(import.meta.url));
+const messagesDir = resolve(here, "..", "src", "i18n", "messages");
 
-function flatten(obj: Json, prefix = ""): string[] {
+function load(locale) {
+  const path = resolve(messagesDir, `${locale}.json`);
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function flatten(obj, prefix = "") {
   if (typeof obj !== "object" || obj === null || Array.isArray(obj)) {
     return [prefix];
   }
   return Object.entries(obj).flatMap(([k, v]) =>
-    flatten(v as Json, prefix ? `${prefix}.${k}` : k),
+    flatten(v, prefix ? `${prefix}.${k}` : k),
   );
 }
 
-const en = new Set(flatten(enMessages as Json));
-const locales: Array<[string, Set<string>]> = [
-  ["ru", new Set(flatten(ruMessages as Json))],
-  ["kk", new Set(flatten(kkMessages as Json))],
+const en = new Set(flatten(load("en")));
+const locales = [
+  ["ru", new Set(flatten(load("ru")))],
+  ["kk", new Set(flatten(load("kk")))],
 ];
 
 let failures = 0;

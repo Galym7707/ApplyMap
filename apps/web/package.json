@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "validate-i18n": "tsx scripts/validate-messages.ts"
+    "validate-i18n": "node scripts/validate-messages.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.6.0",
@@ -53,7 +53,6 @@
     "eslint-config-next": "14.2.3",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
-    "tsx": "^4.21.0",
     "typescript": "^5.4.5"
   }
 }
