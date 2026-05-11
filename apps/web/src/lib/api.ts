@@ -147,6 +147,16 @@ export const targetsApi = {
   remove: (id: string) => api.delete(`/api/targets/${id}`),
 };
 
+// Deterministic stretch/realistic/safety advisor (uses local catalog, no LLM)
+export const advisorApi = {
+  brackets: (params?: {
+    limit_per_bracket?: number;
+    country?: string;
+    common_app_only?: boolean;
+    full_ride_only?: boolean;
+  }) => api.get("/api/advisor/brackets", { params }),
+};
+
 // Reports
 export const reportsApi = {
   generate: (universityId: string) =>

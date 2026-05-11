@@ -7,6 +7,9 @@ from .report import (
     ReportOut, ReportDetailOut, RecommendationOut,
     RewriteVariantOut, SourceReferenceOut,
 )
+from .advisor import (
+    AdvisorBracketsOut, ProfileStrengthOut, UniversityFitOut, ProfileActionOut,
+)
 
 __all__ = [
     "UserCreate", "UserLogin", "UserOut", "UserUpdate", "ProfileCreate", "ProfileUpdate", "ProfileOut", "TokenOut",
@@ -16,4 +19,5 @@ __all__ = [
     "TargetUniversityCreate", "TargetUniversityOut",
     "ReportOut", "ReportDetailOut", "RecommendationOut",
     "RewriteVariantOut", "SourceReferenceOut",
+    "AdvisorBracketsOut", "ProfileStrengthOut", "UniversityFitOut", "ProfileActionOut",
 ]
