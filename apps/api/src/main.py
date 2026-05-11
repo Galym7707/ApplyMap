@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .database import Base, engine
-from .routes import auth, profile, achievements, universities, reports, admin, scholarships
+from .routes import auth, profile, achievements, universities, reports, admin, scholarships, advisor
 from .schema_maintenance import ensure_application_schema
 
 # Create tables on startup (use Alembic migrations in production)
@@ -35,6 +35,7 @@ app.include_router(achievements.router)
 app.include_router(universities.router)
 app.include_router(reports.router)
 app.include_router(scholarships.router)
+app.include_router(advisor.router)
 app.include_router(admin.router)
 
 
