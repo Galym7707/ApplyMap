@@ -18,57 +18,25 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { ApplyMapLogo } from "@/components/brand/ApplyMapLogo";
+import { LocaleSwitcher } from "@/components/LocaleSwitcher";
+import { useTranslation } from "@/i18n/I18nProvider";
 import { achievementsApi, reportsApi, targetsApi } from "@/lib/api";
 import type { Report } from "@/types";
 
-const navItems = [
-  {
-    href: "/dashboard",
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    tooltip: "Profile completeness, stats, and quick actions",
-  },
-  {
-    href: "/profile",
-    label: "Profile",
-    icon: UserCircle,
-    tooltip: "Review and edit your saved academic context",
-  },
-  {
-    href: "/vault",
-    label: "Achievement Vault",
-    icon: BookOpen,
-    tooltip: "Store and manage all your activities and honors",
-  },
-  {
-    href: "/universities",
-    label: "Universities",
-    icon: GraduationCap,
-    tooltip: "Select target schools and generate optimization reports",
-  },
-  {
-    href: "/advisor",
-    label: "University Advisor",
-    icon: Compass,
-    tooltip: "Search official sources and get a target-school action plan",
-  },
-  {
-    href: "/reports",
-    label: "My Reports",
-    icon: FileText,
-    tooltip: "Ranked recommendations and rewrite variants",
-  },
-  {
-    href: "/evidence",
-    label: "Evidence Library",
-    icon: Library,
-    tooltip: "Browse the official sources behind every recommendation",
-  },
-];
+const NAV_ITEMS = [
+  { href: "/dashboard", labelKey: "nav.dashboard", hintKey: "nav.dashboardHint", icon: LayoutDashboard },
+  { href: "/profile", labelKey: "nav.profile", hintKey: "nav.profileHint", icon: UserCircle },
+  { href: "/vault", labelKey: "nav.vault", hintKey: "nav.vaultHint", icon: BookOpen },
+  { href: "/universities", labelKey: "nav.universities", hintKey: "nav.universitiesHint", icon: GraduationCap },
+  { href: "/advisor", labelKey: "nav.advisor", hintKey: "nav.advisorHint", icon: Compass },
+  { href: "/reports", labelKey: "nav.reports", hintKey: "nav.reportsHint", icon: FileText },
+  { href: "/evidence", labelKey: "nav.evidence", hintKey: "nav.evidenceHint", icon: Library },
+] as const;
 
 export function AppSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
 
   const { data: achievementsData } = useQuery({
     queryKey: ["achievements"],
@@ -92,22 +60,22 @@ export function AppSidebar() {
 
   const progressSteps = [
     {
-      label: "Profile",
+      label: t("nav.steps.profile"),
       complete: !!(user?.full_name && user?.country),
       href: "/profile",
     },
     {
-      label: "Vault",
+      label: t("nav.steps.vault"),
       complete: achievements.length > 0,
       href: "/vault",
     },
     {
-      label: "Universities",
+      label: t("nav.steps.universities"),
       complete: targets.length > 0,
       href: "/universities",
     },
     {
-      label: "Report",
+      label: t("nav.steps.report"),
       complete: reports.some((r) => r.status === "completed"),
       href: "/reports",
     },
@@ -125,7 +93,7 @@ export function AppSidebar() {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         <ul className="space-y-0.5">
-          {navItems.map((item) => {
+          {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive =
               pathname === item.href || pathname.startsWith(item.href + "/");
@@ -142,7 +110,7 @@ export function AppSidebar() {
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
-                  {item.label}
+                  {t(item.labelKey)}
                 </Link>
 
                 {/* Hover tooltip — appears to the right of the sidebar */}
@@ -153,7 +121,7 @@ export function AppSidebar() {
                     "opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100"
                   )}
                 >
-                  {item.tooltip}
+                  {t(item.hintKey)}
                   {/* Arrow pointing left */}
                   <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900" />
                 </div>
@@ -167,7 +135,7 @@ export function AppSidebar() {
       <div className="border-t border-slate-200 px-5 py-4">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            Your progress
+            {t("nav.yourProgress")}
           </p>
           <span className={cn(
             "text-[10px] tabular-nums font-semibold",
@@ -238,11 +206,14 @@ export function AppSidebar() {
           </div>
         </div>
 
+        {/* Locale switcher */}
+        <LocaleSwitcher />
+
         {/* Settings */}
         <Link href="/profile">
           <button className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-slate-500 transition-colors hover:bg-white hover:text-slate-700">
             <Settings className="h-4 w-4" />
-            Settings
+            {t("nav.settings")}
           </button>
         </Link>
 
@@ -252,7 +223,7 @@ export function AppSidebar() {
           className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-slate-500 transition-colors hover:bg-white hover:text-slate-700"
         >
           <LogOut className="h-4 w-4" />
-          Sign out
+          {t("common.actions.signOut")}
         </button>
       </div>
     </aside>

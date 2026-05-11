@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { useTranslation } from "@/i18n/I18nProvider";
+
 /**
  * Registers the offline service worker and renders a small status pill when
  * the user goes offline so they know the catalog they're seeing is cached.
@@ -12,6 +14,7 @@ import { useEffect, useState } from "react";
 export function OfflineIndicator() {
   const [online, setOnline] = useState(true);
   const [registered, setRegistered] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -48,8 +51,7 @@ export function OfflineIndicator() {
       aria-live="polite"
       className="fixed right-4 top-4 z-50 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900 shadow-sm"
     >
-      Offline — showing cached data
-      {registered ? "" : " (cache unavailable)"}
+      {registered ? t("common.offlineBanner") : t("common.offlineBannerNoCache")}
     </div>
   );
 }
