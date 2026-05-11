@@ -175,16 +175,24 @@ def generate_report(
     db.commit()
     db.refresh(report)
 
-    # Run synchronously for MVP (can be moved to background task with proper async setup)
-    try:
-        _run_report_generation(db, report.id)
-        db.refresh(report)
-    except Exception:
-        pass
+    # If a Celery broker is configured (REDIS_URL set), dispatch async; the
+    # client should poll ``GET /api/reports/{id}`` for status. Otherwise run
+    # inline as before.
+    from ..celery_app import broker_configured
+    from ..tasks import generate_report_task
+
+    if broker_configured():
+        generate_report_task.delay(str(report.id))
+    else:
+        try:
+            _run_report_generation(db, report.id)
+            db.refresh(report)
+        except Exception:
+            pass
 
     return {
         "data": ReportOut.model_validate(report).model_dump(),
-        "message": "Report generated",
+        "message": "Report generated" if not broker_configured() else "Report queued",
     }
 
 
