@@ -62,3 +62,6 @@ jobs:
 
       - name: Type check
         run: pnpm type-check
+
+      - name: Validate i18n message parity
+        run: pnpm --filter @applymap/web validate-i18n

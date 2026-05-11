@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState } from "react";
 import { Toaster } from "sonner";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
+import { I18nProvider } from "@/i18n/I18nProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -21,8 +22,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <OfflineIndicator />
-      {children}
+      <I18nProvider>
+        <OfflineIndicator />
+        {children}
       <Toaster
         position="top-right"
         toastOptions={{
@@ -39,7 +41,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
           },
         }}
       />
-      <ReactQueryDevtools initialIsOpen={false} />
+        <ReactQueryDevtools initialIsOpen={false} />
+      </I18nProvider>
     </QueryClientProvider>
   );
 }

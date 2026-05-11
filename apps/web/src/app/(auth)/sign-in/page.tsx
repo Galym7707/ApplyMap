@@ -10,16 +10,21 @@ import { Label } from "@/components/ui/label";
 import { ApplyMapLogo } from "@/components/brand/ApplyMapLogo";
 import { useAuth } from "@/hooks/useAuth";
 import { AlertCircle } from "lucide-react";
+import { useTranslation } from "@/i18n/I18nProvider";
 
-const schema = z.object({
-  email: z.string().email("Please enter a valid email"),
-  password: z.string().min(1, "Password is required"),
-});
-
-type FormData = z.infer<typeof schema>;
+type FormData = {
+  email: string;
+  password: string;
+};
 
 export default function SignInPage() {
   const { login, isLoginPending, loginError } = useAuth();
+  const { t } = useTranslation();
+
+  const schema = z.object({
+    email: z.string().email(t("common.errors.invalidEmail")),
+    password: z.string().min(1, t("common.errors.passwordRequired")),
+  });
 
   const {
     register,
@@ -34,8 +39,8 @@ export default function SignInPage() {
 
   const apiError = loginError
     ? ("response" in (loginError as object)
-      ? ((loginError as any).response?.data?.detail ?? "Invalid email or password")
-      : (loginError as Error).message || "An unexpected network error occurred. Please try again.")
+      ? ((loginError as any).response?.data?.detail ?? t("common.errors.invalidCredentials"))
+      : (loginError as Error).message || t("common.errors.network"))
     : null;
 
   return (
@@ -47,8 +52,8 @@ export default function SignInPage() {
 
         <div className="rounded-lg border border-slate-200 bg-white p-8 shadow-sm sm:p-10 md:p-12">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-900">Welcome back</h1>
-            <p className="mt-2 text-base text-slate-500">Sign in to your ApplyMap account.</p>
+            <h1 className="text-3xl font-bold text-slate-900">{t("auth.signIn.title")}</h1>
+            <p className="mt-2 text-base text-slate-500">{t("auth.signIn.subtitle")}</p>
           </div>
 
           {apiError && (
@@ -60,7 +65,7 @@ export default function SignInPage() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-base">Email</Label>
+              <Label htmlFor="email" className="text-base">{t("auth.signIn.emailLabel")}</Label>
               <Input
                 id="email"
                 type="email"
@@ -75,15 +80,15 @@ export default function SignInPage() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-base">Password</Label>
+                <Label htmlFor="password" className="text-base">{t("auth.signIn.passwordLabel")}</Label>
                 <Link href="#" className="text-sm text-navy-700 hover:underline">
-                  Forgot password?
+                  {t("auth.signIn.forgotPassword")}
                 </Link>
               </div>
               <Input
                 id="password"
                 type="password"
-                placeholder="Your password"
+                placeholder=""
                 {...register("password")}
                 className={`h-12 px-4 text-base ${errors.password ? "border-red-400" : ""}`}
               />
@@ -98,14 +103,14 @@ export default function SignInPage() {
               size="xl"
               disabled={isLoginPending}
             >
-              {isLoginPending ? "Signing in..." : "Sign in"}
+              {isLoginPending ? t("auth.signIn.submitLoading") : t("auth.signIn.submit")}
             </Button>
           </form>
 
           <p className="mt-6 text-center text-base text-slate-500">
-            Don&rsquo;t have an account?{" "}
+            {t("auth.signIn.noAccount")}{" "}
             <Link href="/sign-up" className="font-medium text-navy-950 hover:underline">
-              Sign up free
+              {t("auth.signIn.createAccount")}
             </Link>
           </p>
         </div>

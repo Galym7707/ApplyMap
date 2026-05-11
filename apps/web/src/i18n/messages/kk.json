@@ -1,0 +1,106 @@
+{
+  "common": {
+    "appName": "ApplyMap",
+    "tagline": "Ресми дереккөздерге сүйенген университетке өту",
+    "actions": {
+      "signIn": "Кіру",
+      "signUp": "Тіркелу",
+      "signOut": "Шығу",
+      "save": "Сақтау",
+      "cancel": "Болдырмау",
+      "submit": "Жіберу",
+      "delete": "Жою",
+      "edit": "Өзгерту",
+      "retry": "Қайталау",
+      "loading": "Жүктелуде...",
+      "viewAll": "Барлығын көру",
+      "verifyOfficial": "Ресми дереккөзбен салыстырыңыз"
+    },
+    "loading": "Жүктелуде...",
+    "errors": {
+      "generic": "Қате орын алды. Қайталап көріңіз.",
+      "network": "Желі қатесі. Қайта көріңіз.",
+      "invalidEmail": "Жарамды email енгізіңіз",
+      "passwordRequired": "Құпиясөзді енгізіңіз",
+      "invalidCredentials": "Қате email немесе құпиясөз",
+      "offline": "Сіз желіден тыс сияқтысыз. Кейбір деректер жергілікті кэштен жүктелген."
+    },
+    "offlineBanner": "Желіден тыс — кэштелген деректер",
+    "offlineBannerNoCache": "Желіден тыс — кэш қол жетімсіз",
+    "language": "Тіл"
+  },
+  "nav": {
+    "dashboard": "Басты бет",
+    "dashboardHint": "Профильдің толықтығы, статистика және жылдам әрекеттер",
+    "profile": "Профиль",
+    "profileHint": "Сақталған академиялық контекст",
+    "vault": "Жетістіктер қоры",
+    "vaultHint": "Барлық белсенділіктер мен наградаларды сақтаңыз",
+    "universities": "Университеттер",
+    "universitiesHint": "Мақсатты университеттерді таңдап, есеп жасаңыз",
+    "advisor": "Университет кеңесшісі",
+    "advisorHint": "Профиль бойынша іс-жоспар және ресми дереккөздер",
+    "reports": "Менің есептерім",
+    "reportsHint": "Реттелген ұсыныстар және мәтін нұсқалары",
+    "evidence": "Дереккөздер кітапханасы",
+    "evidenceHint": "Әр ұсыныстың негізіндегі ресми дереккөздерді қарау",
+    "settings": "Параметрлер",
+    "yourProgress": "Сіздің прогресс",
+    "steps": {
+      "profile": "Профиль",
+      "vault": "Қор",
+      "universities": "Университеттер",
+      "report": "Есеп"
+    }
+  },
+  "auth": {
+    "signIn": {
+      "title": "Қайта қош келдіңіз",
+      "subtitle": "ApplyMap аккаунтыңызға кіріңіз.",
+      "emailLabel": "Email",
+      "passwordLabel": "Құпиясөз",
+      "forgotPassword": "Құпиясөзді ұмыттыңыз ба?",
+      "submit": "Кіру",
+      "submitLoading": "Кіруде...",
+      "noAccount": "Аккаунтыңыз жоқ па?",
+      "createAccount": "Тегін тіркелу"
+    },
+    "signUp": {
+      "title": "Бастайық",
+      "subtitle": "ApplyMap аккаунтын жасаңыз.",
+      "haveAccount": "Аккаунтыңыз бар ма?",
+      "signInLink": "Кіру"
+    }
+  },
+  "vault": {
+    "title": "Жетістіктер қоры",
+    "subtitle": "Өтінімге негіз болатын белсенділіктер мен наградалар.",
+    "addActivity": "Белсенділік қосу",
+    "addHonor": "Награда қосу",
+    "import": "Импорт",
+    "category": "Санат",
+    "role": "Рөл",
+    "anchor": "Зәкірлік",
+    "supporting": "Қолдаушы",
+    "contextual": "Контекстік"
+  },
+  "advisor": {
+    "title": "Университет кеңесшісі",
+    "subtitle": "Профильге сай stretch, realistic және safety университеттер.",
+    "brackets": {
+      "stretch": "Арман (stretch)",
+      "realistic": "Мақсат (realistic)",
+      "safety": "Қор (safety)"
+    },
+    "fitScore": "Сәйкестік ұпайы",
+    "rationale": "Неліктен бұл нұсқа",
+    "profileActions": "Профильді қалай күшейтуге болады",
+    "transparency": "Жүйенің ұсынысы — ресми дереккөзбен міндетті түрде салыстырыңыз."
+  },
+  "transparency": {
+    "official": "Ресми дереккөз",
+    "publicExample": "Жария мысал",
+    "systemSuggestion": "Жүйенің ұсынысы",
+    "verifyDisclaimer": "ApplyMap нұсқаларды түсінуге көмектеседі. Талаптарды әрқашан университеттің ресми бетінде тексеріңіз."
+  }
+}
